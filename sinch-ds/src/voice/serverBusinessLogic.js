@@ -9,7 +9,7 @@ import { Voice } from '@sinch/sdk-core';
 export const handleIncomingCallEvent = (iceRequest) => {
   console.log(`Handling 'ICE' event:\n${JSON.stringify(iceRequest, null, 2)}`);
 
-  const instruction = 'Thank you for calling your Sinch number. You have just handled an incoming call.';
+  const instruction = 'Thankyou for calling you local DS & Sinch integrator. Bye';
 
   return new Voice.IceSvamletBuilder()
     .setAction(Voice.iceActionHelper.hangup())

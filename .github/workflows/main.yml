@@ -34,7 +34,7 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          docker build -t digitalsamba376/sinch-ds:latest ./node_app
+          docker build -t digitalsamba376/sinch-ds:latest ./sinch-ds
           docker push digitalsamba376/sinch-ds:latest
 
       - name: Deploy to Server via SSH
@@ -49,5 +49,5 @@ jobs:
             sudo docker rm sinch-ds-dev || true
             sudo docker run -d --rm \
                               --name sinch-ds-dev \
-                              -p 3000:3000 \
+                              -p 3030:3030 \
                               digitalsamba376/sinch-ds:latest
