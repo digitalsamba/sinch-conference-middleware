@@ -1,0 +1,70 @@
+name: Deploy sinch-ds
+
+on:
+  push:
+    branches:
+      - main  # Change to your deployment branch if needed
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'  # Use Node.js version 18
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # Step 4: Lint and test the application
+      - name: Lint and Test
+        run: |
+          npm run lint
+          npm test
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+ #     - name: Build and Push Docker Image
+ #       run: |
+ #         docker buildx build \
+ #           --build-arg BASE_IMAGE_BUILD=nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04 \
+ #           --build-arg BASE_IMAGE_RUN=nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04 \
+ #           --cache-from=type=local,src=/tmp/.buildx-cache \
+ #           --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max \
+ #           -t digitalsamba376/skynet:latest .
+ #         docker push digitalsamba376/skynet:latest
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t digitalsamba376/sinch-ds:latest .
+          docker push digitalsamba376/sinch-ds:latest
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            
+            sudo docker pull digitalsamba376/sinch-ds:latest      
+
+            sudo docker stop skynet-dev || true
+            sudo docker rm skynet-dev || true
+
+            sudo sudo docker run -d --rm \
+                              --name sinch-ds-dev \
+                              -p 3000:3000 \
+                              digitalsamba376/sinch-ds:latest                          
