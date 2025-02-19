@@ -25,4 +25,4 @@ COPY . .
 EXPOSE 3030
 
 # Define the command to run the application
-CMD ["node", "server.js"]
+CMD ["node", "src/server.js"]
