@@ -22,11 +22,14 @@ jobs:
 
       # Step 3: Install dependencies
       - name: Install dependencies
-        run: npm install
+        run: |
+          cd node_app
+          npm install
 
       # Step 4: Lint and test the application
       - name: Lint and Test
         run: |
+          cd node_app
           npm run lint
           npm test
       
