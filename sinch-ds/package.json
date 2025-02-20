@@ -1,8 +1,9 @@
 {
-  "name": "@sinch/getting-started_respond-to-incoming-call",
-  "version": "0.0.0",
+  "name": "sinch-ds",
+  "version": "1.0.0",
   "author": "Sinch",
   "description": "",
+  "main": "src/server.js",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
@@ -10,7 +11,11 @@
   },
   "dependencies": {
     "@sinch/sdk-core": "^1.2.0",
-    "dotenv": "^16.4.5",
-    "express": "^4.20.0"
+    "body-parser": "^1.19.0",
+    "dotenv": "^10.0.0",
+    "express": "^4.17.1",
+    "sqlite3": "^5.0.0",
+    "raw-body": "^2.4.1",
+    "content-type": "^1.0.4"
   }
 }
