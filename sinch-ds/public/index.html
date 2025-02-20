@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Samba - Sinch - Middleware Demo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div id="branding">
+                <h1>Digital Samba - Sinch - Middleware Demo</h1>
+            </div>
+        </div>
+    </header>
+    <div class="container">
+        <div class="tab">
+            <button class="tablinks" onclick="openTab(event, 'CreateConference')">Create Conference</button>
+            <button class="tablinks" onclick="openTab(event, 'AddUser')">Add User to Conference</button>
+            <button class="tablinks" onclick="openTab(event, 'ListConferences')">List of Conferences and Users</button>
+            <button class="tablinks" onclick="openTab(event, 'DeleteConference')">Delete Conference</button>
+            <button class="tablinks" onclick="openTab(event, 'RemoveUser')">Remove User from Conference</button>
+        </div>
+
+        <div id="notification" class="notification"></div>
+
+        <div id="CreateConference" class="tabcontent">
+            <div class="form-container">
+                <h1>Create Conference</h1>
+                <form id="conference-form">
+                    <label for="conference_id">Conference ID:</label>
+                    <input type="text" id="conference_id" name="conference_id" required>
+                    <button type="submit">Submit</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="AddUser" class="tabcontent">
+            <div class="form-container">
+                <h1>Add User to Conference</h1>
+                <form id="user-form">
+                    <label for="user_conference_id">Conference ID:</label>
+                    <select id="user_conference_id" name="conference_id" required>
+                        <option value="" disabled selected>Select a conference</option>
+                    </select>
+                    <label for="pin">PIN:</label>
+                    <input type="number" id="pin" name="pin" required>
+                    <label for="token">Token:</label>
+                    <input type="text" id="token" name="token" required>
+                    <button type="submit">Submit</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="ListConferences" class="tabcontent">
+            <div class="conference-list">
+                <h1>List of Conferences and Users</h1>
+                <div id="conference-user-list"></div>
+            </div>
+        </div>
+
+        <div id="DeleteConference" class="tabcontent">
+            <div class="form-container">
+                <h1>Delete Conference</h1>
+                <form id="delete-conference-form">
+                    <label for="delete_conference_id">Conference ID:</label>
+                    <select id="delete_conference_id" name="conference_id" required>
+                        <option value="" disabled selected>Select a conference</option>
+                    </select>
+                    <button type="submit">Delete Conference</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="RemoveUser" class="tabcontent">
+            <div class="form-container">
+                <h1>Remove User from Conference</h1>
+                <form id="remove-user-form">
+                    <label for="remove_user_conference_id">Conference ID:</label>
+                    <select id="remove_user_conference_id" name="conference_id" required>
+                        <option value="" disabled selected>Select a conference</option>
+                    </select>
+                    <label for="remove_pin">PIN:</label>
+                    <select id="remove_pin" name="pin" required>
+                        <option value="" disabled selected>Select a PIN</option>
+                    </select>
+                    <button type="submit">Remove User</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        document.getElementById('conference-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const conference_id = document.getElementById('conference_id').value;
+            const response = await fetch('/api/conference', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ conference_id }),
+            });
+            if (response.ok) {
+                loadConferencesAndUsers();
+                showNotification('Conference created successfully!');
+            } else {
+                alert('Failed to save Conference ID.');
+            }
+        });
+
+        document.getElementById('user-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const conference_id = document.getElementById('user_conference_id').value;
+            const pin = document.getElementById('pin').value;
+            const token = document.getElementById('token').value;
+            const response = await fetch('/api/user', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ conference_id, pin, token }),
+            });
+            if (response.ok) {
+                loadConferencesAndUsers();
+                showNotification('User added successfully!');
+            } else {
+                alert('Failed to save user.');
+            }
+        });
+
+        document.getElementById('delete-conference-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const conference_id = document.getElementById('delete_conference_id').value;
+            const response = await fetch(`/api/conference/${conference_id}`, {
+                method: 'DELETE',
+            });
+            if (response.ok) {
+                loadConferencesAndUsers();
+                showNotification('Conference deleted successfully!');
+            } else {
+                alert('Failed to delete conference.');
+            }
+        });
+
+        document.getElementById('remove-user-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const conference_id = document.getElementById('remove_user_conference_id').value;
+            const pin = document.getElementById('remove_pin').value;
+            const response = await fetch('/api/user', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ conference_id, pin }),
+            });
+            if (response.ok) {
+                loadConferencesAndUsers();
+                showNotification('User removed successfully!');
+            } else {
+                alert('Failed to remove user from conference.');
+            }
+        });
+
+        async function loadConferencesAndUsers() {
+            const response = await fetch('/api/conferences-and-users');
+            const data = await response.json();
+            const conferenceUserList = document.getElementById('conference-user-list');
+            const userConferenceSelect = document.getElementById('user_conference_id');
+            const deleteConferenceSelect = document.getElementById('delete_conference_id');
+            const removeUserConferenceSelect = document.getElementById('remove_user_conference_id');
+            userConferenceSelect.innerHTML = '<option value="" disabled selected>Select a conference</option>';
+            deleteConferenceSelect.innerHTML = '<option value="" disabled selected>Select a conference</option>';
+            removeUserConferenceSelect.innerHTML = '<option value="" disabled selected>Select a conference</option>';
+            conferenceUserList.innerHTML = '';
+
+            data.forEach(conference => {
+                const conferenceOption = document.createElement('option');
+                conferenceOption.value = conference.conference_id;
+                conferenceOption.textContent = conference.conference_id;
+                userConferenceSelect.appendChild(conferenceOption.cloneNode(true));
+                deleteConferenceSelect.appendChild(conferenceOption.cloneNode(true));
+                removeUserConferenceSelect.appendChild(conferenceOption.cloneNode(true));
+
+                const conferenceDiv = document.createElement('div');
+                conferenceDiv.innerHTML = `<h2>${conference.conference_id}</h2>`;
+                const userList = document.createElement('ul');
+                conference.users.forEach(user => {
+                    const userItem = document.createElement('li');
+                    userItem.textContent = `PIN: ${user.pin}, Token: ${user.token}`;
+                    userList.appendChild(userItem);
+                });
+                conferenceDiv.appendChild(userList);
+                conferenceUserList.appendChild(conferenceDiv);
+            });
+        }
+
+        async function loadPins(conference_id) {
+            const response = await fetch(`/api/users?conference_id=${conference_id}`);
+            const users = await response.json();
+            const pinSelect = document.getElementById('remove_pin');
+            pinSelect.innerHTML = '<option value="" disabled selected>Select a PIN</option>';
+            users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.pin;
+                option.textContent = user.pin;
+                pinSelect.appendChild(option);
+            });
+        }
+
+        document.getElementById('remove_user_conference_id').addEventListener('change', (event) => {
+            const conference_id = event.target.value;
+            loadPins(conference_id);
+        });
+
+        // Load conferences and users when the page loads
+        loadConferencesAndUsers();
+    </script>
+</body>
+</html>
