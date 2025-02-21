@@ -17,11 +17,9 @@ This application in the `sinch-ds` folder demonstrates how to use the Sinch Voic
 - Add option to create a Digital Samba room via its API providing a telephone number and PIN for the SIP connection to the conference
 - Add call to Digital Samba API to tell about phone user joined event
 - Add call to Digital Samba API to tell about phone user left event
-- Add option to mute phone user muted after recieving call back from Digital Samba
-ent
-- Add option to unmute phone user muted after recieving call back from Digital Samba
-ent
-- Add option to kick phone user muted after recieving call back from Digital Samba
+- Add option to mute phone user after receiving call back from Digital Samba
+- Add option to unmute phone user after receiving call back from Digital Samba
+- Add option to kick phone user after receiving call back from Digital Samba
 
 ## Prerequisites
 
@@ -56,9 +54,24 @@ ent
     npm start
     ```
 
-2. The server will start on `http://localhost:3030`.
+2. The server will start on http`://localhost:3030`.
 
 3. Configure your Sinch application to use the callback URL `http://localhost:3030/VoiceEvent` for voice events.
+
+## Configuring the Sinch Application
+
+To configure your Sinch application to handle voice events:
+
+1. Log in to your Sinch account and navigate to the [Sinch Dashboard](https://dashboard.sinch.com/).
+2. Create a new application or select an existing one.
+3. Go to the "Voice & Video" section and configure the following settings:
+    - **Callback URL**: Set the callback URL to `http://your-server-ip:3030/VoiceEvent`.
+    - **Event Types**: Ensure that the following event types are enabled:
+        - Incoming Call Event (ICE)
+        - Answered Call Event (ACE)
+        - Disconnected Call Event (DICE)
+        - Prompt Input Event (PIE)
+4. Save the configuration.
 
 ## Docker Support
 
@@ -176,3 +189,10 @@ sinch-ds/
 │       └── main.yml
 ├── package.json
 └── README.md
+
+
+License
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+Acknowledgements
+Sinch for providing the Voice API
