@@ -15,35 +15,35 @@ NOTE : conference ids and user PINs are constructed on the application side.
 
 Conferences can be created via the applications UI or its API 
 
-### GET /conferences
+### GET /conference
 
 Retrieves a list of all conferences.
 
-### POST /conferences
+### POST /conference
 
 Creates a new conference.
 
-### GET /conferences/:conference_id
+### GET /conference/:conference_id
 
 Retrieves details of a specific conference by its ID.
 
-### DELETE /conferences/:conference_id
+### DELETE /conference/:conference_id
 
 Deletes a specific conference by its ID.
 
-### GET /users
+### GET /user
 
 Retrieves a list of all users.
 
-### POST /users
+### POST /user
 
 Creates a new user.
 
-### GET /users/:pin
+### GET /user/:pin
 
 Retrieves details of a specific user by their PIN.
 
-### DELETE /users/:pin
+### DELETE /user/:pin
 
 Deletes a specific user by their PIN.
 
@@ -228,7 +228,7 @@ sinch-ds/
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the GPL-3.0 License. See the LICENSE file for details.
 
 ## Acknowledgements
 
