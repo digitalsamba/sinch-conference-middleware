@@ -1,6 +1,52 @@
 # Digital Samba Sinch Conference Middleware Demo
 
-This application in the `sinch-ds` folder demonstrates how to use the Sinch Voice API to handle incoming calls, prompt users for a PIN, and connect them to a conference based on the provided PIN.
+The demo application in the `sinch-ds` folder demonstrates how to use the Sinch Voice API to handle incoming calls, prompt users for a PIN, and connect them to a conference based on the provided PIN.
+
+The application can then notify the Digital Samba API when a phone user joins or leaves a conference. The application can also control the connected phone user via callbacks from Digital Samba ( to do )
+
+A sqlite database is created with the following structure :
+
+CONFERENCES : conference_id, phone_humber
+USERS : PIN, conference_id, token
+
+Conferences can be created via the applications UI or its API 
+
+### GET /conferences
+
+Retrieves a list of all conferences.
+
+### POST /conferences
+
+Creates a new conference.
+
+### GET /conferences/:conference_id
+
+Retrieves details of a specific conference by its ID.
+
+### DELETE /conferences/:conference_id
+
+Deletes a specific conference by its ID.
+
+### GET /users
+
+Retrieves a list of all users.
+
+### POST /users
+
+Creates a new user.
+
+### GET /users/:pin
+
+Retrieves details of a specific user by their PIN.
+
+### DELETE /users/:pin
+
+Deletes a specific user by their PIN.
+
+----
+
+When a phone user joins a conference, they prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and (to do) Digital Samba is notified by passing the users token. 
+
 
 ## Features
 
