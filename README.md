@@ -105,20 +105,8 @@ When a phone user joins a conference, they are prompted for a PIN which is check
 
 2. The server will start on `http://localhost:3030`.
 
-3. Configure your Sinch application to use the callback URL `http://localhost:3030/VoiceEvent` for voice events.
+3. Configure your Sinch application to use callback URL `http://your-server-ip:3030/VoiceEvent` to handle voice events.
 
-## Configuring the Sinch Application
-
-To configure your Sinch application to handle voice events:
-
-1. Log in to your Sinch account and navigate to the [Sinch Dashboard](https://dashboard.sinch.com/).
-
-2. Create a new application or select an existing one.
-
-3. Go to the "Voice & Video" section and configure the following settings:
-    - **Callback URL**: Set the callback URL to `http://your-server-ip:3030/VoiceEvent`.
-
-4. Save the configuration.
 
 ## Docker Support
 
