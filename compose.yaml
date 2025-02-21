@@ -1,7 +1,7 @@
 services:
   app:
     build:
-      context: ./node_app
+      context: ./sinch_ds
       dockerfile: Dockerfile
     ports:
-      - 3000:3000
+      - 3030:3030
