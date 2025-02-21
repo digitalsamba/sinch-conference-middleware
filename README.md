@@ -6,8 +6,10 @@ The application can then notify the Digital Samba API when a phone user joins or
 
 A sqlite database is created with the following structure :
 
+```plaintext
 CONFERENCES : conference_id, phone_humber
 USERS : PIN, conference_id, token
+```
 
 Conferences can be created via the applications UI or its API 
 
