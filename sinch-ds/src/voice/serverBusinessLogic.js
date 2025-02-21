@@ -1,5 +1,5 @@
-// eslint-disable-next-line no-unused-vars
 import { Voice } from '@sinch/sdk-core';
+import db from '../database.js';
 
 /**
  * Handles an Incoming Call Event (ICE).
@@ -9,12 +9,107 @@ import { Voice } from '@sinch/sdk-core';
 export const handleIncomingCallEvent = (iceRequest) => {
   console.log(`Handling 'ICE' event:\n${JSON.stringify(iceRequest, null, 2)}`);
 
-  const instruction = 'Thankyou for calling you local DS & Sinch integrator. Bye';
+  return new Voice.IceSvamletBuilder()
+    .setAction({
+      name: 'runMenu',
+      barge: true,
+      menus: [
+        {
+          id: 'main',
+          mainPrompt: '#tts[Welcome to the conference. Please enter your PIN followed by pound sign.]',
+          maxDigits: 6,
+          timeoutMills: 30000,
+          options: [
+            {
+              dtmf: '#',
+              action: 'return'
+            }
+          ]
+        }
+      ]
+    })
+    .build();
+};
+
+/**
+ * Handles an Answered Call Event (ACE).
+ * @param {Voice.AnsweredCallEvent} aceRequest - The ACE request object.
+ * @return {Voice.IceResponse} The formatted ICE response to handle the answered call.
+ */
+export const handleAnsweredCallEvent = (aceRequest) => {
+  console.log(`Handling 'ACE' event:\n${JSON.stringify(aceRequest, null, 2)}`);
 
   return new Voice.IceSvamletBuilder()
-    .setAction(Voice.iceActionHelper.hangup())
-    .addInstruction(Voice.iceInstructionHelper.say(instruction))
+    .addInstruction({
+      name: 'say',
+      text: '#tts[Call answered.]'
+    })
     .build();
+};
+
+/**
+ * Handles the DTMF PIN input.
+ * @param {Voice.PromptInputEvent} pieRequest - The PIE request object.
+ * @return {Voice.IceResponse} The formatted ICE response to handle the PIE input.
+ */
+export const handlePinInput = async (pieRequest) => {
+  console.log(`Handling 'PIE' event:\n${JSON.stringify(pieRequest, null, 2)}`);
+  let pin = pieRequest.menuResult.value;
+  console.log(`Received PIN: ${pin}`);
+
+  // Strip trailing # from PIN if it exists
+  pin = pin.replace(/#$/, '');
+  console.log(`Processed PIN: ${pin}`);
+
+  // Check if the PIN exists in the database
+  const user = await new Promise((resolve, reject) => {
+    db.get('SELECT conference_id FROM users WHERE pin = ?', [pin], (err, row) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(row);
+    });
+  });
+
+  if (user) {
+    const conferenceId = user.conference_id;
+    console.log(`PIN is valid. Connecting to conference: ${conferenceId}`);
+
+    return new Voice.IceSvamletBuilder()
+      .addInstruction({
+        name: 'say',
+        text: 'Thank you. We will now connect you to the conference.'
+      })
+      .setAction({
+        name: 'connectConf',
+        conferenceId: String(conferenceId), // Ensure conferenceId is passed as a string
+        moh: 'music3'
+      })
+      .build();
+  } else {
+    const instruction = 'Invalid PIN. Please try again.';
+
+    return new Voice.IceSvamletBuilder()
+      .setAction({
+        name: 'runMenu',
+        barge: true,
+        menus: [
+          {
+            id: 'main',
+            mainPrompt: '#tts[Invalid PIN. Please enter your PIN followed by pound sign.]',
+            maxDigits: 6,
+            timeoutMills: 30000,
+            options: [
+              {
+                dtmf: '#',
+                action: 'return'
+              }
+            ]
+          }
+        ]
+      })
+      .build();
+  }
 };
 
 /**

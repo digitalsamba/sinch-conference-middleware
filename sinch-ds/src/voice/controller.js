@@ -1,6 +1,7 @@
+import pkg from '@sinch/sdk-core';
+const { VoiceCallbackWebhooks } = pkg;
+import { handleDisconnectedCallEvent, handleIncomingCallEvent, handleAnsweredCallEvent, handlePinInput } from './serverBusinessLogic.js';
 import { validateSignature } from './validateSignature.js';
-import { VoiceCallbackWebhooks } from '@sinch/sdk-core';
-import { handleDisconnectedCallEvent, handleIncomingCallEvent } from './serverBusinessLogic.js';
 
 export const voiceController = (app, sinchClientParameters) => {
 
@@ -14,11 +15,17 @@ export const voiceController = (app, sinchClientParameters) => {
       case 'ice':
         response = handleIncomingCallEvent(event);
         break;
+      case 'ace':
+        response = handleAnsweredCallEvent(event);
+        break;
       case 'dice':
         response = handleDisconnectedCallEvent(event);
         break;
+      case 'pie':
+        response = handlePinInput(event);
+        break;
       default:
-        res.status(400).json({ error: 'Unsupported event type' });
+        return res.status(400).json({ error: 'Unsupported event type' });
     }
 
     return res.status(200).json(response);

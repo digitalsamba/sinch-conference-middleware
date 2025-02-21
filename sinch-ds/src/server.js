@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import bodyParser from 'body-parser';
 import db from './database.js';
+import { handlePinInput } from './voice/serverBusinessLogic.js';
 
 dotenv.config();
 
@@ -17,6 +18,8 @@ const sinchClientParameters = {
   applicationKey: process.env.SINCH_APPLICATION_KEY,
   applicationSecret: process.env.SINCH_APPLICATION_SECRET,
 };
+
+app.use(captureRawBody);
 
 app.use((req, res, next) => {
   if (!req.rawBody) {
@@ -130,6 +133,16 @@ app.delete('/api/user', (req, res) => {
     }
     res.send('User removed from conference successfully!');
   });
+});
+
+// Endpoint to handle DTMF PIN input
+app.post('/api/handlePin', async (req, res) => {
+  try {
+    const response = await handlePinInput(req.body);
+    res.json(response);
+  } catch (err) {
+    res.status(500).send('Failed to handle PIN input.');
+  }
 });
 
 app.listen(port, () => {
