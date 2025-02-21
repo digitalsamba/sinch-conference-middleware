@@ -23,7 +23,7 @@ jobs:
       # Step 3: Install dependencies
       - name: Install dependencies
         run: |
-          cd node_app
+          cd sinch-ds
           npm install
       
       - name: Log in to Docker Hub
