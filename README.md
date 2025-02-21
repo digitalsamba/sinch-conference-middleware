@@ -11,7 +11,9 @@ CONFERENCES : conference_id, phone_humber
 USERS : PIN, conference_id, token
 ```
 
-NOTE : conference ids and user PINs are constructed on the application side.
+NOTE : conference ids and user PINs are constructed on the demo application side.
+
+conference ids and user PINs are enforced to be unique by the database so that phone users and the SIP connection can be directed to the correct conference via the applications logic. 
 
 Conferences can be created via the applications UI or its API 
 
