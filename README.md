@@ -11,6 +11,8 @@ CONFERENCES : conference_id, phone_humber
 USERS : PIN, conference_id, token
 ```
 
+NOTE : conference ids and user PINs are constructed on the application side.
+
 Conferences can be created via the applications UI or its API 
 
 ### GET /conferences
