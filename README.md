@@ -49,18 +49,17 @@ Deletes a specific user by their PIN.
 
 ----
 
-When a phone user joins a conference, they prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and (to do) Digital Samba is notified by passing the users token via the phone_user_joined API call
+When a phone user joins a conference, they are prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and (to do) Digital Samba is notified by passing the users token via the phone_user_joined API call
 
 
 ## Features
 
 - Handles Incoming Call Events (ICE)
 - Prompts users for a PIN using DTMF input
+- Handles Prompt Input Events (PIE)
 - Validates the PIN against a database
 - Connects users to a conference if the PIN is valid
-- Handles Answered Call Events (ACE)
 - Handles Disconnected Call Events (DICE)
-- Handles Prompt Input Events (PIE)
 
 ## TO DO 
 
@@ -113,14 +112,12 @@ When a phone user joins a conference, they prompted for a PIN which is checked a
 To configure your Sinch application to handle voice events:
 
 1. Log in to your Sinch account and navigate to the [Sinch Dashboard](https://dashboard.sinch.com/).
+
 2. Create a new application or select an existing one.
+
 3. Go to the "Voice & Video" section and configure the following settings:
     - **Callback URL**: Set the callback URL to `http://your-server-ip:3030/VoiceEvent`.
-    - **Event Types**: Ensure that the following event types are enabled:
-        - Incoming Call Event (ICE)
-        - Answered Call Event (ACE)
-        - Disconnected Call Event (DICE)
-        - Prompt Input Event (PIE)
+
 4. Save the configuration.
 
 ## Docker Support
