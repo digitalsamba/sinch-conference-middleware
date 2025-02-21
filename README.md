@@ -49,7 +49,7 @@ Deletes a specific user by their PIN.
 
 ----
 
-When a phone user joins a conference, they prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and (to do) Digital Samba is notified by passing the users token. 
+When a phone user joins a conference, they prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and (to do) Digital Samba is notified by passing the users token via the phone_user_joined API call
 
 
 ## Features
