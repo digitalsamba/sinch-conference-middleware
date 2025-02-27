@@ -32,22 +32,6 @@ export const handleIncomingCallEvent = (iceRequest) => {
 };
 
 /**
- * Handles an Answered Call Event (ACE).
- * @param {Voice.AnsweredCallEvent} aceRequest - The ACE request object.
- * @return {Voice.IceResponse} The formatted ICE response to handle the answered call.
- */
-export const handleAnsweredCallEvent = (aceRequest) => {
-  console.log(`Handling 'ACE' event:\n${JSON.stringify(aceRequest, null, 2)}`);
-
-  return new Voice.IceSvamletBuilder()
-    .addInstruction({
-      name: 'say',
-      text: '#tts[Call answered.]'
-    })
-    .build();
-};
-
-/**
  * Handles the DTMF PIN input.
  * @param {Voice.PromptInputEvent} pieRequest - The PIE request object.
  * @return {Voice.IceResponse} The formatted ICE response to handle the PIE input.
