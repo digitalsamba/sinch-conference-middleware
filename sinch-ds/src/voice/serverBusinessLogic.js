@@ -9,14 +9,13 @@ import db from '../database.js';
 export const handleIncomingCallEvent = (iceRequest) => {
   console.log(`Handling 'ICE' event:\n${JSON.stringify(iceRequest, null, 2)}`);
 
-  return new Voice.IceSvamletBuilder()
-    .setAction({
-      name: 'runMenu',
+  const response = new Voice.IceSvamletBuilder()
+    .setAction(Voice.iceActionHelper.runMenu({
       barge: true,
       menus: [
         {
           id: 'main',
-          mainPrompt: '#tts[Welcome to the conference. Please enter your PIN followed by pound sign.]',
+          mainPrompt: '#tts[Welcome to the conference. Please enter your PIN followed by hash sign.]',
           maxDigits: 6,
           timeoutMills: 30000,
           options: [
@@ -27,30 +26,18 @@ export const handleIncomingCallEvent = (iceRequest) => {
           ]
         }
       ]
-    })
+    }))
     .build();
+  
+  console.log(`ICE Response:\n${JSON.stringify(response, null, 2)}`);
+  return response;
 };
 
-/**
- * Handles an Answered Call Event (ACE).
- * @param {Voice.AnsweredCallEvent} aceRequest - The ACE request object.
- * @return {Voice.IceResponse} The formatted ICE response to handle the answered call.
- */
-export const handleAnsweredCallEvent = (aceRequest) => {
-  console.log(`Handling 'ACE' event:\n${JSON.stringify(aceRequest, null, 2)}`);
-
-  return new Voice.IceSvamletBuilder()
-    .addInstruction({
-      name: 'say',
-      text: '#tts[Call answered.]'
-    })
-    .build();
-};
 
 /**
  * Handles the DTMF PIN input.
  * @param {Voice.PromptInputEvent} pieRequest - The PIE request object.
- * @return {Voice.IceResponse} The formatted ICE response to handle the PIE input.
+ * @return {Voice.PieResponse} The formatted PIE response to handle the PIN input.
  */
 export const handlePinInput = async (pieRequest) => {
   console.log(`Handling 'PIE' event:\n${JSON.stringify(pieRequest, null, 2)}`);
@@ -71,45 +58,44 @@ export const handlePinInput = async (pieRequest) => {
     });
   });
 
+  let response;
+  
   if (user) {
     const conferenceId = user.conference_id;
     console.log(`PIN is valid. Connecting to conference: ${conferenceId}`);
 
-    return new Voice.IceSvamletBuilder()
-      .addInstruction({
-        name: 'say',
-        text: 'Thank you. We will now connect you to the conference.'
-      })
-      .setAction({
-        name: 'connectConf',
-        conferenceId: String(conferenceId), // Ensure conferenceId is passed as a string
+    response = new Voice.PieSvamletBuilder()
+      .addInstruction(Voice.pieInstructionHelper.say('Thank you. We will now connect you to the conference.'))
+      .setAction(Voice.pieActionHelper.connectConf({
+        conferenceId: String(conferenceId),
         moh: 'music3'
-      })
+      }))
       .build();
-  } else {
-    const instruction = 'Invalid PIN. Please try again.';
+  } 
 
-    return new Voice.IceSvamletBuilder()
-      .setAction({
-        name: 'runMenu',
-        barge: true,
-        menus: [
-          {
-            id: 'main',
-            mainPrompt: '#tts[Invalid PIN. Please enter your PIN followed by pound sign.]',
-            maxDigits: 6,
-            timeoutMills: 30000,
-            options: [
-              {
-                dtmf: '#',
-                action: 'return'
-              }
-            ]
-          }
-        ]
-      })
-      .build();
+  else {
+    response = new Voice.PieSvamletBuilder()
+    .setAction(Voice.pieActionHelper.runMenu({
+      barge: true,
+      menus: [
+        {
+          id: 'main',
+          mainPrompt: '#tts[Unrecognised PIN. Please enter your PIN followed by hash sign.]',
+          maxDigits: 6,
+          timeoutMills: 30000,
+          options: [
+            {
+              dtmf: '#',
+              action: 'return'
+            }
+          ]
+        }
+      ]
+    }))
+    .build();
   }
+  console.log(`PIE Response:\n${JSON.stringify(response, null, 2)}`);
+  return response;
 };
 
 /**
