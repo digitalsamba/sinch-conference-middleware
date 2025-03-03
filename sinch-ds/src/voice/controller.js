@@ -1,6 +1,6 @@
 import pkg from '@sinch/sdk-core';
 const { VoiceCallbackWebhooks } = pkg;
-import { handleDisconnectedCallEvent, handleIncomingCallEvent, handleAnsweredCallEvent, handlePinInput } from './serverBusinessLogic.js';
+import { handleDisconnectedCallEvent, handleIncomingCallEvent, handlePinInput } from './serverBusinessLogic.js';
 import { validateSignature } from './validateSignature.js';
 
 export const voiceController = (app, sinchClientParameters) => {
@@ -11,23 +11,27 @@ export const voiceController = (app, sinchClientParameters) => {
 
     const event = voiceCallbackWebhooks.parseEvent(req.body);
     let response;
-    switch (event.event) {
-      case 'ice':
-        response = handleIncomingCallEvent(event);
-        break;
-      case 'ace':
-        response = handleAnsweredCallEvent(event);
-        break;
-      case 'dice':
-        response = handleDisconnectedCallEvent(event);
-        break;
-      case 'pie':
-        response = handlePinInput(event);
-        break;
-      default:
-        return res.status(400).json({ error: 'Unsupported event type' });
+    try {
+      switch (event.event) {
+        case 'ice':
+          response = handleIncomingCallEvent(event);
+          break;
+        case 'pie':
+          response = await handlePinInput(event); // Added await here
+          break;
+        case 'dice':
+          response = handleDisconnectedCallEvent(event);
+          break;
+        default:
+          return res.status(400).json({ error: 'Unsupported event type' });
+      }
+      
+      return res.status(200).json(response);
+    } 
+    catch (error)
+    {
+      console.error('Error handling event:', error);
+      return res.status(500).json({ error: 'Internal server error' });
     }
-
-    return res.status(200).json(response);
   });
 };
