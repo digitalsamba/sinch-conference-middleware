@@ -1,150 +1,174 @@
 import express from 'express';
-import { captureRawBody } from './middleware/rawbody.js';
-import { voiceController } from './voice/controller.js';
-import dotenv from 'dotenv';
+import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import bodyParser from 'body-parser';
 import db from './database.js';
-import { handlePinInput } from './voice/serverBusinessLogic.js';
 
-dotenv.config();
+// Import your voice controller and other modules
+import { voiceController } from './voice/controller.js';
 
-const app = express();
-const port = process.env.port || 3030;
-
-/** @type {import('@sinch/sdk-core').SinchClientParameters} */
-const sinchClientParameters = {
-  applicationKey: process.env.SINCH_APPLICATION_KEY,
-  applicationSecret: process.env.SINCH_APPLICATION_SECRET,
-};
-
-app.use(captureRawBody);
-
-app.use((req, res, next) => {
-  if (!req.rawBody) {
-    bodyParser.json()(req, res, next);
-  } else {
-    next();
-  }
-});
-
-// Resolve __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const app = express();
+const PORT = process.env.PORT || 3030;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-voiceController(app, sinchClientParameters);
-
-app.post('/api/conference', (req, res) => {
-  const { conference_id } = req.body;
-  db.run('INSERT INTO conference (conference_id) VALUES (?)', [conference_id], (err) => {
-    if (err) {
-      return res.status(500).send('Failed to save Conference ID.');
-    }
-    res.send('Conference ID saved successfully!');
-  });
+// Initialize the voice controller
+voiceController(app, {
+  applicationKey: process.env.SINCH_APPLICATION_KEY,
+  applicationSecret: process.env.SINCH_APPLICATION_SECRET
 });
 
-app.post('/api/user', (req, res) => {
-  const { conference_id, pin, token } = req.body;
-  if (isNaN(pin)) {
-    return res.status(400).send('PIN must be numeric.');
-  }
-  db.run('INSERT INTO users (conference_id, pin, token) VALUES (?, ?, ?)', [conference_id, pin, token], (err) => {
-    if (err) {
-      if (err.code === 'SQLITE_CONSTRAINT') {
-        return res.status(400).send('Failed to save user: the PIN has already been assigned to a user.');
+// API routes for conferences
+app.post('/api/conference', (req, res) => {
+  const { conference_id, digitalsamba_room_id } = req.body;
+  
+  db.run(
+    'INSERT INTO conference (conference_id, digitalsamba_room_id) VALUES (?, ?)',
+    [conference_id, digitalsamba_room_id],
+    function(err) {
+      if (err) {
+        console.error('Error creating conference:', err);
+        return res.status(500).json({ error: 'Failed to create conference' });
       }
-      return res.status(500).send('Failed to save user.');
+      res.status(201).json({ 
+        id: this.lastID, 
+        conference_id, 
+        digitalsamba_room_id 
+      });
     }
-    res.send('User saved successfully!');
-  });
+  );
 });
 
 app.get('/api/conferences', (req, res) => {
-  db.all('SELECT conference_id FROM conference', [], (err, rows) => {
+  db.all('SELECT * FROM conference', (err, rows) => {
     if (err) {
-      return res.status(500).send('Failed to fetch conferences.');
+      console.error('Error fetching conferences:', err);
+      return res.status(500).json({ error: 'Failed to fetch conferences' });
     }
     res.json(rows);
   });
+});
+
+app.delete('/api/conference/:conference_id', (req, res) => {
+  const conference_id = req.params.conference_id;
+  
+  db.run('DELETE FROM users WHERE conference_id = ?', [conference_id], function(err) {
+    if (err) {
+      console.error('Error deleting users for conference:', err);
+      return res.status(500).json({ error: 'Failed to delete users for conference' });
+    }
+    
+    db.run('DELETE FROM conference WHERE conference_id = ?', [conference_id], function(err) {
+      if (err) {
+        console.error('Error deleting conference:', err);
+        return res.status(500).json({ error: 'Failed to delete conference' });
+      }
+      res.json({ message: 'Conference and associated users deleted successfully' });
+    });
+  });
+});
+
+// API routes for users
+app.post('/api/user', (req, res) => {
+  const { conference_id, pin, display_name } = req.body;
+  
+  db.run(
+    'INSERT INTO users (conference_id, pin, display_name) VALUES (?, ?, ?)',
+    [conference_id, pin, display_name],
+    function(err) {
+      if (err) {
+        console.error('Error creating user:', err);
+        return res.status(500).json({ error: 'Failed to create user' });
+      }
+      res.status(201).json({ 
+        id: this.lastID, 
+        conference_id, 
+        pin, 
+        display_name 
+      });
+    }
+  );
 });
 
 app.get('/api/users', (req, res) => {
   const { conference_id } = req.query;
-  let query = 'SELECT conference_id, pin, token FROM users';
-  const params = [];
+  
   if (conference_id) {
-    query += ' WHERE conference_id = ?';
-    params.push(conference_id);
+    db.all('SELECT * FROM users WHERE conference_id = ?', [conference_id], (err, rows) => {
+      if (err) {
+        console.error('Error fetching users for conference:', err);
+        return res.status(500).json({ error: 'Failed to fetch users' });
+      }
+      res.json(rows);
+    });
+  } else {
+    db.all('SELECT * FROM users', (err, rows) => {
+      if (err) {
+        console.error('Error fetching users:', err);
+        return res.status(500).json({ error: 'Failed to fetch users' });
+      }
+      res.json(rows);
+    });
   }
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).send('Failed to fetch users.');
-    }
-    res.json(rows);
-  });
 });
 
-// Endpoint to fetch conferences along with their associated users
-app.get('/api/conferences-and-users', (req, res) => {
-  db.all('SELECT conference_id FROM conference', [], (err, conferences) => {
-    if (err) {
-      return res.status(500).send('Failed to fetch conferences.');
-    }
-    const conferenceIds = conferences.map(conference => conference.conference_id);
-    db.all('SELECT conference_id, pin, token FROM users WHERE conference_id IN (' + conferenceIds.map(() => '?').join(',') + ')', conferenceIds, (err, users) => {
-      if (err) {
-        return res.status(500).send('Failed to fetch users.');
-      }
-      const result = conferences.map(conference => ({
-        conference_id: conference.conference_id,
-        users: users.filter(user => user.conference_id === conference.conference_id)
-      }));
-      res.json(result);
-    });
-  });
-});
-
-// Endpoint to delete a conference and related users
-app.delete('/api/conference/:conference_id', (req, res) => {
-  const { conference_id } = req.params;
-  db.run('DELETE FROM users WHERE conference_id = ?', [conference_id], (err) => {
-    if (err) {
-      return res.status(500).send('Failed to delete users related to the conference.');
-    }
-    db.run('DELETE FROM conference WHERE conference_id = ?', [conference_id], (err) => {
-      if (err) {
-        return res.status(500).send('Failed to delete conference.');
-      }
-      res.send('Conference and related users deleted successfully!');
-    });
-  });
-});
-
-// Endpoint to remove a user from a conference
 app.delete('/api/user', (req, res) => {
-  const { conference_id, pin } = req.body;
-  db.run('DELETE FROM users WHERE conference_id = ? AND pin = ?', [conference_id, pin], (err) => {
+  const { pin } = req.body;
+  
+  db.run('DELETE FROM users WHERE pin = ?', [pin], function(err) {
     if (err) {
-      return res.status(500).send('Failed to delete user from conference.');
+      console.error('Error deleting user:', err);
+      return res.status(500).json({ error: 'Failed to delete user' });
     }
-    res.send('User removed from conference successfully!');
+    res.json({ message: 'User deleted successfully' });
   });
 });
 
-// Endpoint to handle DTMF PIN input
-app.post('/api/handlePin', async (req, res) => {
-  try {
-    const response = await handlePinInput(req.body);
-    res.json(response);
-  } catch (err) {
-    res.status(500).send('Failed to handle PIN input.');
-  }
+// Special endpoint to get conferences with their associated users
+app.get('/api/conferences-and-users', (req, res) => {
+  db.all('SELECT * FROM conference', (err, conferences) => {
+    if (err) {
+      console.error('Error fetching conferences:', err);
+      return res.status(500).json({ error: 'Failed to fetch conferences and users' });
+    }
+    
+    const promises = conferences.map(conference => {
+      return new Promise((resolve, reject) => {
+        db.all(
+          'SELECT * FROM users WHERE conference_id = ?', 
+          [conference.conference_id], 
+          (err, users) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve({
+                ...conference,
+                users: users
+              });
+            }
+          }
+        );
+      });
+    });
+    
+    Promise.all(promises)
+      .then(results => {
+        res.json(results);
+      })
+      .catch(error => {
+        console.error('Error fetching users for conferences:', error);
+        res.status(500).json({ error: 'Failed to fetch conferences and users' });
+      });
+  });
 });
 
-app.listen(port, () => {
-  console.log(`Server is listening on port ${port}`);
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });

@@ -2,20 +2,20 @@
 
 The demo application in the `sinch-ds` folder demonstrates how to use the Sinch Voice API to handle incoming calls, prompt users for a PIN, and connect them to a conference based on the provided PIN.
 
-The application can then notify the Digital Samba API when a phone user joins or leaves a conference. The application can also control the connected phone user via callbacks from Digital Samba ( to do )
+The application can then notify the Digital Samba API when a phone user joins or leaves a conference. The application can also control the connected phone user via callbacks from Digital Samba.
 
-A sqlite database is created with the following structure :
+A sqlite database is created with the following structure:
 
 ```plaintext
-CONFERENCES : conference_id, phone_humber
+CONFERENCES : conference_id, phone_number, samba_room_id
 USERS : PIN, conference_id, token
 ```
 
-NOTE : conference ids and user PINs are constructed on the demo application side.
+NOTE: Conference IDs and user PINs are constructed on the demo application side.
 
-conference ids and user PINs are enforced to be unique by the database so that phone users and the SIP connection can be directed to the correct conference via the applications logic. 
+Conference IDs and user PINs are enforced to be unique by the database so that phone users and the SIP connection can be directed to the correct conference via the application's logic.
 
-Conferences can be created via the applications UI or its API 
+Conferences can be created via the application's UI or its API.
 
 ### GET /conference
 
@@ -51,8 +51,7 @@ Deletes a specific user by their PIN.
 
 ----
 
-When a phone user joins a conference, they are prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and (to do) Digital Samba is notified by passing the users token via the phone_user_joined API call
-
+When a phone user joins a conference, they are prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and Digital Samba is notified by passing the room_id, call_id, display_name and external_id to the phone_user_joined API call.
 
 ## Features
 
@@ -62,15 +61,12 @@ When a phone user joins a conference, they are prompted for a PIN which is check
 - Validates the PIN against a database
 - Connects users to a conference if the PIN is valid
 - Handles Disconnected Call Events (DICE)
-
-## TO DO 
-
-- Add option to create a Digital Samba room via its API providing a telephone number and PIN for the SIP connection to the conference
-- Add call to Digital Samba API to tell about phone user joined event
-- Add call to Digital Samba API to tell about phone user left event
-- Add option to mute phone user after receiving call back from Digital Samba
-- Add option to unmute phone user after receiving call back from Digital Samba
-- Add option to kick phone user after receiving call back from Digital Samba
+- Creates Digital Samba rooms via API, providing telephone number and PIN for SIP connection
+- Notifies Digital Samba API about phone user joined events
+- Notifies Digital Samba API about phone user left events
+- Supports muting phone users via Digital Samba callbacks
+- Supports unmuting phone users via Digital Samba callbacks
+- Supports kicking phone users via Digital Samba callbacks
 
 ## Prerequisites
 
@@ -90,11 +86,13 @@ When a phone user joins a conference, they are prompted for a PIN which is check
 
 2. Set up environment variables:
 
-    Create a `.env` file in the root of the [`sinch-ds`](sinch-ds ) folder and add the following variables:
+    Create a `.env` file in the root of the [`sinch-ds`](sinch-ds) folder and add the following variables:
 
     ```plaintext
     SINCH_APPLICATION_KEY=your_sinch_application_key
     SINCH_APPLICATION_SECRET=your_sinch_application_secret
+    SAMBA_API_KEY=your_digital_samba_api_key
+    SAMBA_API_URL=your_digital_samba_api_url
     ```
 
 ## Usage
@@ -109,6 +107,7 @@ When a phone user joins a conference, they are prompted for a PIN which is check
 
 3. Configure your Sinch application to use callback URL `http://your-server-ip:3030/VoiceEvent` to handle voice events.
 
+4. Configure Digital Samba to send user control callbacks to `http://your-server-ip:3030/samba/callback`.
 
 ## Docker Support
 
@@ -117,7 +116,7 @@ You can build and run the application using Docker.
 1. Build the Docker image:
 
     ```sh
-    docker build -t sinch-conference-middleware .
+    docker build -t sinch-conference-middleware . 
     ```
 
 2. Run the Docker container:
@@ -179,6 +178,8 @@ You can automate the deployment of the application to a server using GitHub Acti
               # Create .env file on the server
               echo "SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }}" > /path/to/.env
               echo "SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }}" >> /path/to/.env
+              echo "SAMBA_API_KEY=${{ secrets.SAMBA_API_KEY }}" >> /path/to/.env
+              echo "SAMBA_API_URL=${{ secrets.SAMBA_API_URL }}" >> /path/to/.env
               echo "PORT=${{ secrets.PORT }}" >> /path/to/.env
 
               # Pull the latest Docker image
@@ -205,6 +206,8 @@ You can automate the deployment of the application to a server using GitHub Acti
     - `SERVER_SSH_KEY`: Your SSH private key for accessing the server
     - `SINCH_APPLICATION_KEY`: Your Sinch application key
     - `SINCH_APPLICATION_SECRET`: Your Sinch application secret
+    - `SAMBA_API_KEY`: Your Digital Samba API key
+    - `SAMBA_API_URL`: Your Digital Samba API URL
     - `PORT`: The port number (e.g., 3030)
 
 ## Project Structure
@@ -215,9 +218,12 @@ sinch-ds/
 │   ├── voice/
 │   │   ├── controller.js
 │   │   ├── serverBusinessLogic.js
+│   │   ├── sambaIntegration.js
 │   │   └── validateSignature.js
 │   ├── middleware/
 │   │   └── rawbody.js
+│   ├── routes/
+│   │   └── sambaRoutes.js
 │   └── database.js
 ├── .env
 ├── Dockerfile
@@ -230,8 +236,9 @@ sinch-ds/
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the GPL-3.0 License. See the LICENSE file for details.
 
 ## Acknowledgements
 
-Sinch for providing the Voice API
+Sinch for providing the Voice API  
+Digital Samba for their telephony and conferencing API
