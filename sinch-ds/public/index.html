@@ -31,6 +31,8 @@
                 <form id="conference-form">
                     <label for="conference_id">Conference ID:</label>
                     <input type="text" id="conference_id" name="conference_id" required>
+                    <label for="digitalsamba_room_id">Digital Samba Room ID:</label>
+                    <input type="text" id="digitalsamba_room_id" name="digitalsamba_room_id" placeholder="UUID format (optional)">
                     <button type="submit">Submit</button>
                 </form>
             </div>
@@ -46,8 +48,8 @@
                     </select>
                     <label for="pin">PIN:</label>
                     <input type="number" id="pin" name="pin" required>
-                    <label for="token">Token:</label>
-                    <input type="text" id="token" name="token" required>
+                    <label for="display_name">Display Name:</label>
+                    <input type="text" id="display_name" name="display_name" placeholder="Optional">
                     <button type="submit">Submit</button>
                 </form>
             </div>
@@ -118,12 +120,13 @@
         document.getElementById('conference-form').addEventListener('submit', async (event) => {
             event.preventDefault();
             const conference_id = document.getElementById('conference_id').value;
+            const digitalsamba_room_id = document.getElementById('digitalsamba_room_id').value || null;
             const response = await fetch('/api/conference', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ conference_id }),
+                body: JSON.stringify({ conference_id, digitalsamba_room_id }),
             });
             if (response.ok) {
                 loadConferencesAndUsers();
@@ -137,13 +140,13 @@
             event.preventDefault();
             const conference_id = document.getElementById('user_conference_id').value;
             const pin = document.getElementById('pin').value;
-            const token = document.getElementById('token').value;
+            const display_name = document.getElementById('display_name').value || null;
             const response = await fetch('/api/user', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ conference_id, pin, token }),
+                body: JSON.stringify({ conference_id, pin, display_name }),
             });
             if (response.ok) {
                 loadConferencesAndUsers();
@@ -207,16 +210,44 @@
                 removeUserConferenceSelect.appendChild(conferenceOption.cloneNode(true));
 
                 const conferenceDiv = document.createElement('div');
-                conferenceDiv.innerHTML = `<h2>${conference.conference_id}</h2>`;
-                const userList = document.createElement('ul');
-                conference.users.forEach(user => {
-                    const userItem = document.createElement('li');
-                    userItem.textContent = `PIN: ${user.pin}, Token: ${user.token}`;
-                    userList.appendChild(userItem);
-                });
-                conferenceDiv.appendChild(userList);
+                conferenceDiv.className = 'conference-entry';
+                
+                let conferenceHTML = `<h2>Conference ID: ${conference.conference_id}</h2>`;
+                
+                if (conference.digitalsamba_room_id) {
+                    conferenceHTML += `<p>Digital Samba Room ID: ${conference.digitalsamba_room_id}</p>`;
+                }
+                
+                if (conference.users && conference.users.length > 0) {
+                    conferenceHTML += `<h3>Users:</h3>`;
+                    conferenceHTML += `<div class="users-container">`;
+                    
+                    conference.users.forEach(user => {
+                        conferenceHTML += `<div class="user-entry">`;
+                        conferenceHTML += `<p>PIN: ${user.pin}</p>`;
+                        
+                        if (user.display_name) {
+                            conferenceHTML += `<p>Display Name: ${user.display_name}</p>`;
+                        } else {
+                            conferenceHTML += `<p>Display Name: <em>Not set</em></p>`;
+                        }
+                        
+                        conferenceHTML += `</div>`;
+                    });
+                    
+                    conferenceHTML += `</div>`;
+                } else {
+                    conferenceHTML += `<p>No users in this conference</p>`;
+                }
+                
+                conferenceHTML += `<hr>`;
+                conferenceDiv.innerHTML = conferenceHTML;
                 conferenceUserList.appendChild(conferenceDiv);
             });
+            
+            if (data.length === 0) {
+                conferenceUserList.innerHTML = '<p>No conferences found</p>';
+            }
         }
 
         async function loadPins(conference_id) {
@@ -239,6 +270,10 @@
 
         // Load conferences and users when the page loads
         loadConferencesAndUsers();
+        
+        // Open first tab by default
+        document.getElementsByClassName('tablinks')[0].click();
     </script>
 </body>
 </html>
+``` 

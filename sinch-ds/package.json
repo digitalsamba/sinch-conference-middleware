@@ -12,10 +12,11 @@
   "dependencies": {
     "@sinch/sdk-core": "^1.2.0",
     "body-parser": "^1.19.0",
+    "content-type": "^1.0.4",
+    "cors": "^2.8.5",
     "dotenv": "^10.0.0",
     "express": "^4.17.1",
-    "sqlite3": "^5.0.0",
     "raw-body": "^2.4.1",
-    "content-type": "^1.0.4"
+    "sqlite3": "^5.0.0"
   }
 }
