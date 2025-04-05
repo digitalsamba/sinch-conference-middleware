@@ -91,33 +91,102 @@ header nav {
     border-radius: 5px;
 }
 
-/* Tabbed interface styles */
-.tab {
-    overflow: hidden;
-    border: 1px solid #ccc;
-    background-color: #f1f1f1;
+/* Add these styles for the new navigation structure */
+
+.primary-nav {
+    display: flex;
+    margin-top: 20px;
+    background: #333;
+    border-radius: 5px 5px 0 0;
 }
-.tab button {
-    background-color: inherit;
-    float: left;
+
+.primary-tab {
+    background: #333;
+    color: white;
     border: none;
-    outline: none;
+    padding: 15px 30px;
+    font-size: 16px;
     cursor: pointer;
-    padding: 14px 16px;
-    transition: 0.3s;
-    font-size: 17px;
+    transition: background-color 0.3s;
+    flex: 1;
+    text-align: center;
+    border-radius: 5px 5px 0 0;
 }
-.tab button:hover {
-    background-color: #ddd;
+
+.primary-tab:hover {
+    background: #444;
 }
-.tab button.active {
-    background-color: #ccc;
+
+.primary-tab.active {
+    background: #77aaff;
+    font-weight: bold;
 }
+
+.secondary-nav {
+    display: flex;
+    flex-wrap: wrap;
+    background: #f1f1f1;
+    border-bottom: 1px solid #ddd;
+}
+
+.secondary-tab {
+    background: #f1f1f1;
+    border: none;
+    padding: 12px 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.secondary-tab:hover {
+    background: #ddd;
+}
+
+.secondary-tab.active {
+    background: white;
+    border-bottom: 3px solid #77aaff;
+    font-weight: bold;
+}
+
+.main-section {
+    display: none;
+    border: 1px solid #ccc;
+    border-top: none;
+    background: white;
+}
+
+.main-section.active {
+    display: block;
+}
+
+.secondary-content {
+    min-height: 400px;
+}
+
 .tabcontent {
     display: none;
     padding: 20px;
-    border: 1px solid #ccc;
-    border-top: none;
+}
+
+.tabcontent.active {
+    display: block;
+}
+
+/* Update your existing styles to match the new structure */
+
+.tab {
+    display: none; /* Hide old tab navigation */
+}
+
+.active-calls {
+    padding: 20px;
+}
+
+.active-calls h1 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 2px solid #77aaff;
+    padding-bottom: 10px;
 }
 
 /* Notification styles */
@@ -183,11 +252,112 @@ hr {
     margin: 20px 0;
 }
 
+.active-calls {
+    padding: 20px;
+}
+
+.actions {
+    margin-bottom: 20px;
+}
+
+.action-button {
+    background-color: #4c8bf5;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.action-button:hover {
+    background-color: #3b78e7;
+}
+
+.conference-calls {
+    margin-bottom: 30px;
+    background: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.calls-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.call-entry {
+    background: #f5f5f5;
+    border: 1px solid #eee;
+    border-left: 4px solid #4c8bf5;
+    padding: 15px;
+    width: calc(50% - 20px);
+    box-sizing: border-box;
+    border-radius: 5px;
+    position: relative;
+}
+
+.call-entry p {
+    margin: 5px 0;
+}
+
+.call-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.mute-btn, .unmute-btn, .kick-btn {
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.3s;
+}
+
+.mute-btn {
+    background-color: #ffd700;
+    color: #333;
+}
+
+.unmute-btn {
+    background-color: #90ee90;
+    color: #333;
+}
+
+.kick-btn {
+    background-color: #ff6b6b;
+    color: white;
+}
+
+.mute-btn:hover {
+    background-color: #e6c200;
+}
+
+.unmute-btn:hover {
+    background-color: #7bd47b;
+}
+
+.kick-btn:hover {
+    background-color: #ff4d4d;
+}
+
 @media (max-width: 768px) {
     .users-container {
         flex-direction: column;
     }
     .user-entry {
+        width: 100%;
+    }
+    .calls-container {
+        flex-direction: column;
+    }
+    .call-entry {
         width: 100%;
     }
 }

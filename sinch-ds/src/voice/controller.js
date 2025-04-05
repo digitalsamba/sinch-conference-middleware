@@ -8,8 +8,21 @@ export const voiceController = (app, sinchClientParameters) => {
   const voiceCallbackWebhooks = new VoiceCallbackWebhooks(sinchClientParameters);
 
   app.post('/VoiceEvent', validateSignature(voiceCallbackWebhooks), async (req, res) => {
+    // Parse the raw body as JSON if it exists
+    let parsedBody;
+    if (req.rawBody) {
+      try {
+        parsedBody = JSON.parse(req.rawBody);
+      } catch (e) {
+        console.error('Error parsing raw body as JSON:', e);
+        return res.status(400).json({ error: 'Invalid JSON body' });
+      }
+    }
 
-    const event = voiceCallbackWebhooks.parseEvent(req.body);
+    // Use the parsed body or the existing req.body (if any)
+    const requestBody = parsedBody || req.body || {};
+    
+    const event = voiceCallbackWebhooks.parseEvent(requestBody);
     let response;
     try {
       switch (event.event) {
