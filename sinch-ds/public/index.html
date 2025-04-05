@@ -15,98 +15,169 @@
         </div>
     </header>
     <div class="container">
-        <div class="tab">
-            <button class="tablinks" onclick="openTab(event, 'CreateConference')">Create Conference</button>
-            <button class="tablinks" onclick="openTab(event, 'AddUser')">Add User to Conference</button>
-            <button class="tablinks" onclick="openTab(event, 'ListConferences')">List of Conferences and Users</button>
-            <button class="tablinks" onclick="openTab(event, 'DeleteConference')">Delete Conference</button>
-            <button class="tablinks" onclick="openTab(event, 'RemoveUser')">Remove User from Conference</button>
+        <!-- Primary Navigation -->
+        <div class="primary-nav">
+            <button class="primary-tab active" data-section="conference-management">Conference Management</button>
+            <button class="primary-tab" data-section="active-calls">Active Calls</button>
         </div>
 
         <div id="notification" class="notification"></div>
 
-        <div id="CreateConference" class="tabcontent">
-            <div class="form-container">
-                <h1>Create Conference</h1>
-                <form id="conference-form">
-                    <label for="conference_id">Conference ID:</label>
-                    <input type="text" id="conference_id" name="conference_id" required>
-                    <label for="digitalsamba_room_id">Digital Samba Room ID:</label>
-                    <input type="text" id="digitalsamba_room_id" name="digitalsamba_room_id" placeholder="UUID format (optional)">
-                    <button type="submit">Submit</button>
-                </form>
+        <!-- Conference Management Section -->
+        <section id="conference-management" class="main-section active">
+            <!-- Secondary Navigation for Conference Management -->
+            <div class="secondary-nav">
+                <button class="secondary-tab active" data-tab="CreateConference">Create Conference</button>
+                <button class="secondary-tab" data-tab="AddUser">Add User</button>
+                <button class="secondary-tab" data-tab="ListConferences">List Conferences</button>
+                <button class="secondary-tab" data-tab="DeleteConference">Delete Conference</button>
+                <button class="secondary-tab" data-tab="RemoveUser">Remove User</button>
             </div>
-        </div>
 
-        <div id="AddUser" class="tabcontent">
-            <div class="form-container">
-                <h1>Add User to Conference</h1>
-                <form id="user-form">
-                    <label for="user_conference_id">Conference ID:</label>
-                    <select id="user_conference_id" name="conference_id" required>
-                        <option value="" disabled selected>Select a conference</option>
-                    </select>
-                    <label for="pin">PIN:</label>
-                    <input type="number" id="pin" name="pin" required>
-                    <label for="display_name">Display Name:</label>
-                    <input type="text" id="display_name" name="display_name" placeholder="Optional">
-                    <button type="submit">Submit</button>
-                </form>
-            </div>
-        </div>
+            <!-- Conference Management Content -->
+            <div class="secondary-content">
+                <div id="CreateConference" class="tabcontent active">
+                    <div class="form-container">
+                        <h1>Create Conference</h1>
+                        <form id="conference-form">
+                            <label for="conference_id">Conference ID:</label>
+                            <input type="text" id="conference_id" name="conference_id" required>
+                            <label for="digitalsamba_room_id">Digital Samba Room ID:</label>
+                            <input type="text" id="digitalsamba_room_id" name="digitalsamba_room_id" placeholder="UUID format (optional)">
+                            <button type="submit">Submit</button>
+                        </form>
+                    </div>
+                </div>
 
-        <div id="ListConferences" class="tabcontent">
-            <div class="conference-list">
-                <h1>List of Conferences and Users</h1>
-                <div id="conference-user-list"></div>
-            </div>
-        </div>
+                <div id="AddUser" class="tabcontent">
+                    <div class="form-container">
+                        <h1>Add User to Conference</h1>
+                        <form id="user-form">
+                            <label for="user_conference_id">Conference ID:</label>
+                            <select id="user_conference_id" name="conference_id" required>
+                                <option value="" disabled selected>Select a conference</option>
+                            </select>
+                            <label for="pin">PIN:</label>
+                            <input type="number" id="pin" name="pin" required>
+                            <label for="display_name">Display Name:</label>
+                            <input type="text" id="display_name" name="display_name" placeholder="Optional">
+                            <button type="submit">Submit</button>
+                        </form>
+                    </div>
+                </div>
 
-        <div id="DeleteConference" class="tabcontent">
-            <div class="form-container">
-                <h1>Delete Conference</h1>
-                <form id="delete-conference-form">
-                    <label for="delete_conference_id">Conference ID:</label>
-                    <select id="delete_conference_id" name="conference_id" required>
-                        <option value="" disabled selected>Select a conference</option>
-                    </select>
-                    <button type="submit">Delete Conference</button>
-                </form>
-            </div>
-        </div>
+                <div id="ListConferences" class="tabcontent">
+                    <div class="conference-list">
+                        <h1>List of Conferences and Users</h1>
+                        <div id="conference-user-list"></div>
+                    </div>
+                </div>
 
-        <div id="RemoveUser" class="tabcontent">
-            <div class="form-container">
-                <h1>Remove User from Conference</h1>
-                <form id="remove-user-form">
-                    <label for="remove_user_conference_id">Conference ID:</label>
-                    <select id="remove_user_conference_id" name="conference_id" required>
-                        <option value="" disabled selected>Select a conference</option>
-                    </select>
-                    <label for="remove_pin">PIN:</label>
-                    <select id="remove_pin" name="pin" required>
-                        <option value="" disabled selected>Select a PIN</option>
-                    </select>
-                    <button type="submit">Remove User</button>
-                </form>
+                <div id="DeleteConference" class="tabcontent">
+                    <div class="form-container">
+                        <h1>Delete Conference</h1>
+                        <form id="delete-conference-form">
+                            <label for="delete_conference_id">Conference ID:</label>
+                            <select id="delete_conference_id" name="conference_id" required>
+                                <option value="" disabled selected>Select a conference</option>
+                            </select>
+                            <button type="submit">Delete Conference</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="RemoveUser" class="tabcontent">
+                    <div class="form-container">
+                        <h1>Remove User from Conference</h1>
+                        <form id="remove-user-form">
+                            <label for="remove_user_conference_id">Conference ID:</label>
+                            <select id="remove_user_conference_id" name="conference_id" required>
+                                <option value="" disabled selected>Select a conference</option>
+                            </select>
+                            <label for="remove_pin">PIN:</label>
+                            <select id="remove_pin" name="pin" required>
+                                <option value="" disabled selected>Select a PIN</option>
+                            </select>
+                            <button type="submit">Remove User</button>
+                        </form>
+                    </div>
+                </div>
             </div>
-        </div>
+        </section>
+
+        <!-- Active Calls Section -->
+        <section id="active-calls" class="main-section">
+            <div class="active-calls">
+                <h1>Active Calls</h1>
+                <div class="actions">
+                    <button id="refresh-calls" class="action-button">Refresh</button>
+                </div>
+                <div id="active-calls-list"></div>
+            </div>
+        </section>
     </div>
 
     <script>
-        function openTab(evt, tabName) {
-            var i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tabcontent");
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].style.display = "none";
-            }
-            tablinks = document.getElementsByClassName("tablinks");
-            for (i = 0; i < tablinks.length; i++) {
-                tablinks[i].className = tablinks[i].className.replace(" active", "");
-            }
-            document.getElementById(tabName).style.display = "block";
-            evt.currentTarget.className += " active";
-        }
+        // Primary navigation handling
+        document.querySelectorAll('.primary-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active class from all primary tabs
+                document.querySelectorAll('.primary-tab').forEach(t => {
+                    t.classList.remove('active');
+                });
+                
+                // Add active class to clicked tab
+                this.classList.add('active');
+                
+                // Hide all main sections
+                document.querySelectorAll('.main-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+                
+                // Show the selected section
+                const sectionId = this.dataset.section;
+                document.getElementById(sectionId).classList.add('active');
+                
+                // If switching to active calls, load them
+                if (sectionId === 'active-calls') {
+                    loadActiveCalls();
+                    
+                    // Start auto-refresh for active calls
+                    if (window.refreshInterval) {
+                        clearInterval(window.refreshInterval);
+                    }
+                    window.refreshInterval = setInterval(loadActiveCalls, 10000);
+                } else {
+                    // Stop auto-refresh when not on active calls
+                    if (window.refreshInterval) {
+                        clearInterval(window.refreshInterval);
+                        window.refreshInterval = null;
+                    }
+                }
+            });
+        });
+        
+        // Secondary navigation handling
+        document.querySelectorAll('.secondary-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active class from all secondary tabs
+                document.querySelectorAll('.secondary-tab').forEach(t => {
+                    t.classList.remove('active');
+                });
+                
+                // Add active class to clicked tab
+                this.classList.add('active');
+                
+                // Hide all tab content
+                document.querySelectorAll('.tabcontent').forEach(content => {
+                    content.classList.remove('active');
+                });
+                
+                // Show the selected tab content
+                const tabId = this.dataset.tab;
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
 
         function showNotification(message) {
             const notification = document.getElementById('notification');
@@ -250,6 +321,160 @@
             }
         }
 
+        async function loadActiveCalls() {
+            const activeCallsList = document.getElementById('active-calls-list');
+            activeCallsList.innerHTML = '<p>Loading active calls...</p>';
+            
+            try {
+                const response = await fetch('/api/live-calls');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch active calls');
+                }
+                
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    activeCallsList.innerHTML = '<p>No active calls at this moment.</p>';
+                    return;
+                }
+                
+                // Group calls by conference
+                const callsByConference = {};
+                
+                data.forEach(call => {
+                    if (!callsByConference[call.conference_id]) {
+                        callsByConference[call.conference_id] = [];
+                    }
+                    callsByConference[call.conference_id].push(call);
+                });
+                
+                activeCallsList.innerHTML = '';
+                
+                // Display calls grouped by conference
+                Object.keys(callsByConference).forEach(conferenceId => {
+                    const conferenceDiv = document.createElement('div');
+                    conferenceDiv.className = 'conference-calls';
+                    
+                    let conferenceHTML = `<h2>Conference: ${conferenceId}</h2>`;
+                    conferenceHTML += `<h3>Active Calls: ${callsByConference[conferenceId].length}</h3>`;
+                    conferenceHTML += `<div class="calls-container">`;
+                    
+                    callsByConference[conferenceId].forEach(call => {
+                        conferenceHTML += `<div class="call-entry">`;
+                        conferenceHTML += `<p>Call ID: ${call.call_id}</p>`;
+                        
+                        if (call.display_name) {
+                            conferenceHTML += `<p>User: ${call.display_name}</p>`;
+                        } else {
+                            conferenceHTML += `<p>User: <em>Anonymous</em></p>`;
+                        }
+                        
+                        // Display caller number (CLI) if available
+                        if (call.cli) {
+                            conferenceHTML += `<p>Caller Number: ${call.cli}</p>`;
+                        }
+                        
+                        conferenceHTML += `<p>Type: ${call.is_sip ? 'SIP' : 'Phone'}</p>`;
+                        
+                        // Calculate call duration - fixed to ensure proper timestamp handling
+                        const startTime = new Date(call.start_time);
+                        const now = new Date();
+                        const durationMs = now.getTime() - startTime.getTime();
+                        const durationMinutes = Math.floor(durationMs / 60000);
+                        const durationSeconds = Math.floor((durationMs % 60000) / 1000);
+                        conferenceHTML += `<p>Duration: ${durationMinutes}m ${durationSeconds}s</p>`;
+                        
+                        // Add action buttons
+                        conferenceHTML += `<div class="call-actions">`;
+                        conferenceHTML += `<button class="mute-btn" data-call-id="${call.call_id}">Mute</button>`;
+                        conferenceHTML += `<button class="unmute-btn" data-call-id="${call.call_id}">Unmute</button>`;
+                        conferenceHTML += `<button class="kick-btn" data-call-id="${call.call_id}">Kick</button>`;
+                        conferenceHTML += `</div>`;
+                        
+                        conferenceHTML += `</div>`;
+                    });
+                    
+                    conferenceHTML += `</div>`;
+                    conferenceHTML += `<hr>`;
+                    
+                    conferenceDiv.innerHTML = conferenceHTML;
+                    activeCallsList.appendChild(conferenceDiv);
+                });
+                
+                // Add event listeners for action buttons
+                document.querySelectorAll('.mute-btn').forEach(button => {
+                    button.addEventListener('click', async (event) => {
+                        const callId = event.target.dataset.callId;
+                        try {
+                            const response = await fetch(`/api/call/${callId}/mute`, {
+                                method: 'POST'
+                            });
+                            
+                            if (response.ok) {
+                                showNotification('Call muted successfully');
+                            } else {
+                                showNotification('Failed to mute call');
+                            }
+                        } catch (error) {
+                            console.error('Error muting call:', error);
+                            showNotification('Error muting call');
+                        }
+                    });
+                });
+                
+                document.querySelectorAll('.unmute-btn').forEach(button => {
+                    button.addEventListener('click', async (event) => {
+                        const callId = event.target.dataset.callId;
+                        try {
+                            const response = await fetch(`/api/call/${callId}/unmute`, {
+                                method: 'POST'
+                            });
+                            
+                            if (response.ok) {
+                                showNotification('Call unmuted successfully');
+                            } else {
+                                showNotification('Failed to unmute call');
+                            }
+                        } catch (error) {
+                            console.error('Error unmuting call:', error);
+                            showNotification('Error unmuting call');
+                        }
+                    });
+                });
+                
+                document.querySelectorAll('.kick-btn').forEach(button => {
+                    button.addEventListener('click', async (event) => {
+                        const callId = event.target.dataset.callId;
+                        if (confirm('Are you sure you want to kick this caller?')) {
+                            try {
+                                const response = await fetch(`/api/call/${callId}/kick`, {
+                                    method: 'POST'
+                                });
+                                
+                                if (response.ok) {
+                                    showNotification('Caller kicked successfully');
+                                    loadActiveCalls(); // Refresh the list
+                                } else {
+                                    showNotification('Failed to kick caller');
+                                }
+                            } catch (error) {
+                                console.error('Error kicking caller:', error);
+                                showNotification('Error kicking caller');
+                            }
+                        }
+                    });
+                });
+                
+            } catch (error) {
+                console.error('Error loading active calls:', error);
+                activeCallsList.innerHTML = '<p>Error loading active calls. Please try again.</p>';
+            }
+        }
+
+        // Event listener for refresh button in the Active Calls tab
+        document.getElementById('refresh-calls').addEventListener('click', loadActiveCalls);
+        
         async function loadPins(conference_id) {
             const response = await fetch(`/api/users?conference_id=${conference_id}`);
             const users = await response.json();
@@ -271,9 +496,12 @@
         // Load conferences and users when the page loads
         loadConferencesAndUsers();
         
-        // Open first tab by default
-        document.getElementsByClassName('tablinks')[0].click();
+        // Clean up interval when page is unloaded
+        window.addEventListener('beforeunload', () => {
+            if (window.refreshInterval) {
+                clearInterval(window.refreshInterval);
+            }
+        });
     </script>
 </body>
 </html>
-``` 
