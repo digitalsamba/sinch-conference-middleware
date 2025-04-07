@@ -7,8 +7,9 @@ The application can then notify the Digital Samba API when a phone user joins or
 A sqlite database is created with the following structure:
 
 ```plaintext
-CONFERENCES : conference_id, phone_number, samba_room_id
-USERS : PIN, conference_id, token
+CONFERENCE : id, conference_id, digitalsamba_room_id
+USERS : id, conference_id, pin, display_name, external_id
+LIVE_CALLS : id, conference_id, call_id, pin, is_sip, start_time, cli
 ```
 
 NOTE: Conference IDs and user PINs are constructed on the demo application side.
@@ -17,41 +18,88 @@ Conference IDs and user PINs are enforced to be unique by the database so that p
 
 Conferences can be created via the application's UI or its API.
 
-### GET /conference
+### API Endpoints
+
+#### Conference Endpoints
+
+##### GET /api/conferences
 
 Retrieves a list of all conferences.
 
-### POST /conference
+##### POST /api/conference
 
-Creates a new conference.
+Creates a new conference with the provided conference_id and optional digitalsamba_room_id.
 
-### GET /conference/:conference_id
+##### GET /api/conferences-and-users
 
-Retrieves details of a specific conference by its ID.
+Retrieves a list of all conferences with their associated users.
 
-### DELETE /conference/:conference_id
+##### DELETE /api/conference/:conference_id
 
-Deletes a specific conference by its ID.
+Deletes a specific conference by its ID and all associated users.
 
-### GET /user
+#### User Endpoints
 
-Retrieves a list of all users.
+##### GET /api/users
 
-### POST /user
+Retrieves a list of all users, or users filtered by conference_id if provided as a query parameter.
 
-Creates a new user.
+##### POST /api/user
 
-### GET /user/:pin
+Creates a new user with the provided conference_id, pin, optional display_name, and optional external_id.
 
-Retrieves details of a specific user by their PIN.
+##### PATCH /api/user/:pin/external-id
 
-### DELETE /user/:pin
+Updates the external_id for a user with the specified PIN.
+
+##### DELETE /api/user
 
 Deletes a specific user by their PIN.
+
+#### Live Calls Endpoints
+
+##### GET /api/live-calls
+
+Retrieves a list of all active calls with user information.
+
+##### GET /api/live-calls/:conference_id
+
+Retrieves a list of all active calls for a specific conference.
+
+##### POST /api/call/:call_id/mute
+
+Mutes a specific call in a conference.
+
+##### POST /api/call/:call_id/unmute
+
+Unmutes a specific call in a conference.
+
+##### POST /api/call/:call_id/kick
+
+Removes a specific call from a conference.
 
 ----
 
 When a phone user joins a conference, they are prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and Digital Samba is notified by passing the room_id, call_id, display_name and external_id to the phone_user_joined API call.
+
+## Digital Samba API Integration
+
+The application integrates with the Digital Samba API to provide real-time notifications about phone participants joining and leaving Digital Samba rooms. This integration is handled by the `digitalSambaService.js` module.
+
+### Key Features
+
+- **Authentication**: Uses Bearer token authentication with Digital Samba developer API key
+- **Participant Join Notification**: Notifies Digital Samba when phone participants join a room
+  - Sends participant details including call ID, phone number, name, and external ID
+- **Participant Leave Notification**: Notifies Digital Samba when phone participants leave a room
+  - Sends the call ID of the participant that left
+
+### API Endpoints
+
+The integration uses the following Digital Samba API endpoints:
+
+- `/api/v1/rooms/{roomId}/phone-participants/joined`: Notifies when phone participants join a room
+- `/api/v1/rooms/{roomId}/phone-participants/left`: Notifies when phone participants leave a room
 
 ## Features
 
@@ -67,6 +115,7 @@ When a phone user joins a conference, they are prompted for a PIN which is check
 - Supports muting phone users via Digital Samba callbacks
 - Supports unmuting phone users via Digital Samba callbacks
 - Supports kicking phone users via Digital Samba callbacks
+- Supports associating an external ID with users for use with Digital Samba API
 
 ## Prerequisites
 
@@ -91,8 +140,8 @@ When a phone user joins a conference, they are prompted for a PIN which is check
     ```plaintext
     SINCH_APPLICATION_KEY=your_sinch_application_key
     SINCH_APPLICATION_SECRET=your_sinch_application_secret
-    SAMBA_API_KEY=your_digital_samba_api_key
-    SAMBA_API_URL=your_digital_samba_api_url
+    DIGITAL_SAMBA_DEVELOPER_KEY=your_digital_samba_developer_key
+    DIGITAL_SAMBA_API_URL=your_digital_samba_api_url
     ```
 
 ## Usage
@@ -178,8 +227,8 @@ You can automate the deployment of the application to a server using GitHub Acti
               # Create .env file on the server
               echo "SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }}" > /path/to/.env
               echo "SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }}" >> /path/to/.env
-              echo "SAMBA_API_KEY=${{ secrets.SAMBA_API_KEY }}" >> /path/to/.env
-              echo "SAMBA_API_URL=${{ secrets.SAMBA_API_URL }}" >> /path/to/.env
+              echo "DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }}" >> /path/to/.env
+              echo "DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }}" >> /path/to/.env
               echo "PORT=${{ secrets.PORT }}" >> /path/to/.env
 
               # Pull the latest Docker image
@@ -206,8 +255,8 @@ You can automate the deployment of the application to a server using GitHub Acti
     - `SERVER_SSH_KEY`: Your SSH private key for accessing the server
     - `SINCH_APPLICATION_KEY`: Your Sinch application key
     - `SINCH_APPLICATION_SECRET`: Your Sinch application secret
-    - `SAMBA_API_KEY`: Your Digital Samba API key
-    - `SAMBA_API_URL`: Your Digital Samba API URL
+    - `DIGITAL_SAMBA_DEVELOPER_KEY`: Your Digital Samba developer key
+    - `DIGITAL_SAMBA_API_URL`: Your Digital Samba API URL
     - `PORT`: The port number (e.g., 3030)
 
 ## Project Structure
@@ -218,13 +267,14 @@ sinch-ds/
 │   ├── voice/
 │   │   ├── controller.js
 │   │   ├── serverBusinessLogic.js
-│   │   ├── sambaIntegration.js
-│   │   └── validateSignature.js
+│   │   ├── validateSignature.js
 │   ├── middleware/
 │   │   └── rawbody.js
-│   ├── routes/
-│   │   └── sambaRoutes.js
-│   └── database.js
+│   ├── services/
+│   │   ├── digitalSambaService.js
+│   │   └── sinchService.js
+│   ├── database.js
+│   └── server.js
 ├── .env
 ├── Dockerfile
 ├── .github/

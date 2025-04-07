@@ -5,8 +5,8 @@ db.serialize(() => {
     // Create conferences table with the digitalsamba_room_id field
     db.run('CREATE TABLE conference (id INTEGER PRIMARY KEY AUTOINCREMENT, conference_id TEXT NOT NULL UNIQUE CHECK(length(conference_id) <= 64), digitalsamba_room_id TEXT)');
     
-    // Create users table with token renamed to display_name and made optional
-    db.run('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, conference_id TEXT NOT NULL, pin INTEGER NOT NULL UNIQUE, display_name TEXT, FOREIGN KEY(conference_id) REFERENCES conference(conference_id))');
+    // Create users table with external_id field added
+    db.run('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, conference_id TEXT NOT NULL, pin INTEGER NOT NULL UNIQUE, display_name TEXT, external_id TEXT, FOREIGN KEY(conference_id) REFERENCES conference(conference_id))');
     
     // Create live_calls table to track active calls
     // Modified to store ISO string timestamp for better compatibility
@@ -91,14 +91,14 @@ export const getUserByPin = (pin) => {
 
 export const createUser = (userData) => {
     return new Promise((resolve, reject) => {
-        const { conference_id, pin, display_name = null } = userData;
+        const { conference_id, pin, display_name = null, external_id = null } = userData;
         
         db.run(
-            'INSERT INTO users (conference_id, pin, display_name) VALUES (?, ?, ?)',
-            [conference_id, pin, display_name],
+            'INSERT INTO users (conference_id, pin, display_name, external_id) VALUES (?, ?, ?, ?)',
+            [conference_id, pin, display_name, external_id],
             function(err) {
                 if (err) return reject(err);
-                resolve({ id: this.lastID, pin, display_name });
+                resolve({ id: this.lastID, pin, display_name, external_id });
             }
         );
     });
@@ -127,6 +127,19 @@ export const updateUserDisplayName = (pin, display_name) => {
         db.run(
             'UPDATE users SET display_name = ? WHERE pin = ?',
             [display_name, pin],
+            function(err) {
+                if (err) return reject(err);
+                resolve({ changes: this.changes });
+            }
+        );
+    });
+};
+
+export const updateUserExternalId = (pin, external_id) => {
+    return new Promise((resolve, reject) => {
+        db.run(
+            'UPDATE users SET external_id = ? WHERE pin = ?',
+            [external_id, pin],
             function(err) {
                 if (err) return reject(err);
                 resolve({ changes: this.changes });
@@ -180,7 +193,7 @@ export const getLiveCall = (call_id) => {
 export const getLiveCallWithUserInfo = (call_id) => {
     return new Promise((resolve, reject) => {
         db.get(
-            `SELECT lc.*, u.display_name 
+            `SELECT lc.*, u.display_name, u.external_id
              FROM live_calls lc 
              LEFT JOIN users u ON lc.pin = u.pin 
              WHERE lc.call_id = ?`, 
@@ -205,7 +218,7 @@ export const getLiveCallsByConference = (conference_id) => {
 export const getLiveCallsByConferenceWithUserInfo = (conference_id) => {
     return new Promise((resolve, reject) => {
         db.all(
-            `SELECT lc.*, u.display_name 
+            `SELECT lc.*, u.display_name, u.external_id
              FROM live_calls lc 
              LEFT JOIN users u ON lc.pin = u.pin 
              WHERE lc.conference_id = ?`, 

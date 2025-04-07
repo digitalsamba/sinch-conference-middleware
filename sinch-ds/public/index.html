@@ -61,6 +61,8 @@
                             <input type="number" id="pin" name="pin" required>
                             <label for="display_name">Display Name:</label>
                             <input type="text" id="display_name" name="display_name" placeholder="Optional">
+                            <label for="external_id">External ID:</label>
+                            <input type="text" id="external_id" name="external_id" placeholder="Optional">
                             <button type="submit">Submit</button>
                         </form>
                     </div>
@@ -212,12 +214,13 @@
             const conference_id = document.getElementById('user_conference_id').value;
             const pin = document.getElementById('pin').value;
             const display_name = document.getElementById('display_name').value || null;
+            const external_id = document.getElementById('external_id').value || null;
             const response = await fetch('/api/user', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ conference_id, pin, display_name }),
+                body: JSON.stringify({ conference_id, pin, display_name, external_id }),
             });
             if (response.ok) {
                 loadConferencesAndUsers();
@@ -301,6 +304,12 @@
                             conferenceHTML += `<p>Display Name: ${user.display_name}</p>`;
                         } else {
                             conferenceHTML += `<p>Display Name: <em>Not set</em></p>`;
+                        }
+
+                        if (user.external_id) {
+                            conferenceHTML += `<p>External ID: ${user.external_id}</p>`;
+                        } else {
+                            conferenceHTML += `<p>External ID: <em>Not set</em></p>`;
                         }
                         
                         conferenceHTML += `</div>`;
