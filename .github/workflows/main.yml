@@ -48,6 +48,10 @@ jobs:
             sudo docker stop sinch-ds-dev || true
             sudo docker rm sinch-ds-dev || true
             sudo docker run -d --rm \
-                              --name sinch-ds-dev \
-                              -p 3030:3030 \
-                              digitalsamba376/sinch-ds:latest
+                            --name sinch-ds-dev \
+                            --network deployment_proxy \
+                            -p 3030:3030 \
+                            -e VIRTUAL_HOST=${{ secrets.VIRTUAL_HOST }} \
+                            -e LETSENCRYPT_HOST=${{ secrets.VIRTUAL_HOST }} \
+                            -e VIRTUAL_PORT=3030 \
+                            digitalsamba376/sinch-ds:latest
