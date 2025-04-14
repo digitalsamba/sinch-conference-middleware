@@ -51,7 +51,7 @@ jobs:
                             --name sinch-ds-dev \
                             --network deployment_proxy \
                             -p 3030:3030 \
-                            -e VIRTUAL_HOST=${{ secrets.VIRTUAL_HOST }} \
-                            -e LETSENCRYPT_HOST=${{ secrets.VIRTUAL_HOST }} \
+                            -e VIRTUAL_HOST=${{ secrets.DEV_HOST }} \
+                            -e LETSENCRYPT_HOST=${{ secrets.DEV_HOST }} \
                             -e VIRTUAL_PORT=3030 \
                             digitalsamba376/sinch-ds:latest
