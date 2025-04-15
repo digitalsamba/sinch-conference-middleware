@@ -103,7 +103,6 @@ A `Dockerfile` is provided in the `sinch-ds` directory for building a container 
     docker run -p 3030:3030 --env-file .env -v "${PWD}\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     ```
     *   `-p 3030:3030`: Maps the host port 3030 to the container's HTTP/WebSocket port.
-    # *   `-p 3031:3031`: Removed
     *   `--env-file .env`: Loads environment variables from your local `.env` file.
     *   `-v .../conference_data.db:/app/conference_data.db`: Mounts the local database file into the container for persistence. Create an empty `conference_data.db` file first if it doesn't exist (`touch conference_data.db` or `type nul > conference_data.db` on Windows).
     *   `--name sinch-middleware`: Assigns a name to the container.
