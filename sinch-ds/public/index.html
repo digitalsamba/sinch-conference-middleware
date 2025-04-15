@@ -520,8 +520,10 @@
         // --- WebSocket Log Streaming ---
         let logWebSocket = null;
         const logContentElement = document.getElementById('server-logs-content');
-        const WS_PORT = 3031; // Make sure this matches the WS_PORT in server.js
-        const wsUrl = `ws://${window.location.hostname}:${WS_PORT}`;
+        // const WS_PORT = 3031; // No longer needed
+        // Construct WebSocket URL based on current page location
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}`;
 
         function connectWebSocket() {
             logWebSocket = new WebSocket(wsUrl);
@@ -551,15 +553,18 @@
 
             logWebSocket.onerror = (error) => {
                 console.error('WebSocket Error:', error);
-                appendLog(`--- WebSocket Error: ${error.message || 'Connection failed'}. Attempting to reconnect... ---`);
+                appendLog(`--- WebSocket Error: Connection failed. Is the server running and accessible at ${wsUrl}? ---`);
                 // Optional: Implement retry logic here
             };
 
-            logWebSocket.onclose = () => {
-                console.log('WebSocket connection closed');
-                appendLog('--- WebSocket connection closed. Attempting to reconnect... ---');
+            logWebSocket.onclose = (event) => {
+                console.log('WebSocket connection closed:', event.code, event.reason);
+                appendLog(`--- WebSocket connection closed (Code: ${event.code}). Attempting to reconnect... ---`);
                 // Simple reconnect logic (try every 5 seconds)
-                setTimeout(connectWebSocket, 5000);
+                // Avoid reconnecting if the closure was intentional (e.g., navigating away)
+                if (event.code !== 1000 && event.code !== 1005) { // 1000 = Normal Closure, 1005 = No Status Received
+                    setTimeout(connectWebSocket, 5000);
+                }
             };
         }
 
@@ -598,15 +603,14 @@
             }
             // Disconnect WebSocket if navigating away from logs
             if (sectionId !== 'server-logs' && logWebSocket && logWebSocket.readyState === WebSocket.OPEN) {
-                console.log('Closing WebSocket connection.');
-                logWebSocket.close();
+                console.log('Closing WebSocket connection intentionally.');
+                logWebSocket.close(1000, "User navigated away"); // Use normal closure code
                 logWebSocket = null;
             }
 
             // Handle specific section logic
             if (sectionId === 'active-calls') {
                 loadActiveCalls();
-                // Start auto-refresh for active calls
                 window.refreshInterval = setInterval(loadActiveCalls, 10000);
             } else if (sectionId === 'server-logs') {
                 // Connect WebSocket only if not already connected or connection is closed
@@ -627,7 +631,7 @@
                 clearInterval(window.refreshInterval);
             }
             if (logWebSocket && logWebSocket.readyState === WebSocket.OPEN) {
-                logWebSocket.close();
+                logWebSocket.close(1000, "Page unloaded"); // Use normal closure code
             }
         });
     </script>

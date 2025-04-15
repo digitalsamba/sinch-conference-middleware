@@ -35,10 +35,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app); // Create HTTP server from Express app
 const PORT = process.env.PORT || 3030;
-const WS_PORT = process.env.WS_PORT || 3031; // Define a port for WebSocket server
+// const WS_PORT = process.env.WS_PORT || 3031; // Removed separate WS_PORT
 
 // --- WebSocket Server Setup ---
-const wss = new WebSocketServer({ port: WS_PORT });
+// Attach WebSocket server to the existing HTTP server
+const wss = new WebSocketServer({ server });
 const clients = new Set(); // Keep track of connected clients
 const logBuffer = []; // Buffer to store recent logs
 const MAX_LOG_BUFFER = 100; // Max number of log lines to buffer
@@ -88,8 +89,9 @@ console.info = (...args) => logAndBroadcast('info', ...args);
 console.debug = (...args) => logAndBroadcast('debug', ...args);
 
 
-wss.on('connection', (ws) => {
-    console.info('WebSocket client connected'); // Use overridden console.info
+wss.on('connection', (ws, req) => { // req is available here if needed
+    const clientIp = req.socket.remoteAddress; // Example: Get client IP
+    console.info(`WebSocket client connected from ${clientIp}`); // Use overridden console.info
     clients.add(ws);
 
     // Send buffered logs to the newly connected client
@@ -97,21 +99,19 @@ wss.on('connection', (ws) => {
 
     ws.on('message', (message) => {
         // Handle messages from clients if needed (e.g., commands)
-        console.info(`Received WebSocket message: ${message}`); // Use overridden console.info
+        console.info(`Received WebSocket message from ${clientIp}: ${message}`); // Use overridden console.info
     });
 
     ws.on('close', () => {
-        console.info('WebSocket client disconnected'); // Use overridden console.info
+        console.info(`WebSocket client disconnected: ${clientIp}`); // Use overridden console.info
         clients.delete(ws);
     });
 
     ws.on('error', (error) => {
-        console.error('WebSocket error:', error); // Use overridden console.error
+        console.error(`WebSocket error from ${clientIp}:`, error); // Use overridden console.error
         clients.delete(ws); // Remove client on error as well
     });
 });
-
-console.info(`WebSocket server started on port ${WS_PORT}`); // Use overridden console.info
 
 // --- Database Initialization --- 
 initializeDatabase().then(() => {
