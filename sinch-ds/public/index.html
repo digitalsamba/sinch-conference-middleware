@@ -396,15 +396,39 @@
                             conferenceHTML += `<p>Caller Number: ${call.cli}</p>`;
                         }
                         
-                        conferenceHTML += `<p>Type: ${call.is_sip ? 'SIP' : 'Phone'}</p>`;
+                        conferenceHTML += `<p>Type: ${call.is_sip ? 'SIP' : 'Phone'}</p>`;                        // Calculate duration with time zone handling
+                        let duration = '0m 0s';
                         
-                        // Calculate call duration - fixed to ensure proper timestamp handling
-                        const startTime = new Date(call.start_time);
-                        const now = new Date();
-                        const durationMs = now.getTime() - startTime.getTime();
-                        const durationMinutes = Math.floor(durationMs / 60000);
-                        const durationSeconds = Math.floor((durationMs % 60000) / 1000);
-                        conferenceHTML += `<p>Duration: ${durationMinutes}m ${durationSeconds}s</p>`;
+                        if (call.joined_at) {
+                            try {
+                                // Parse the date string to get components
+                                const parts = call.joined_at.match(/(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/);
+                                if (parts) {
+                                    // Use Date.UTC to create the date in UTC time
+                                    const year = parseInt(parts[1]);
+                                    const month = parseInt(parts[2]) - 1; // Months are 0-indexed
+                                    const day = parseInt(parts[3]);
+                                    const hour = parseInt(parts[4]);
+                                    const minute = parseInt(parts[5]);
+                                    const second = parseInt(parts[6]);
+                                    
+                                    // Create date from UTC timestamp
+                                    const timestamp = Date.UTC(year, month, day, hour, minute, second);
+                                    const joinDate = new Date(timestamp);
+                                    
+                                    // Calculate duration
+                                    const now = new Date();
+                                    const diffMs = now - joinDate;
+                                    const minutes = Math.floor(diffMs / 60000);
+                                    const seconds = Math.floor((diffMs % 60000) / 1000);
+                                    duration = `${minutes}m ${seconds}s`;
+                                }
+                            } catch (e) {
+                                // Silent error handling - just use default duration
+                            }
+                        }
+                        
+                        conferenceHTML += `<p>Duration: ${duration}</p>`;
                         
                         // Add action buttons
                         conferenceHTML += `<div class="call-actions">`;
