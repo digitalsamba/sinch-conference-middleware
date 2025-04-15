@@ -1,14 +1,12 @@
 name: Deploy sinch-ds
-
 on:
   push:
     branches:
       - main  # Change to your deployment branch if needed
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    environment: development  # Specify the development environment to use its secrets
     steps:
       # Step 1: Check out the repository code
       - name: Checkout code
@@ -19,24 +17,41 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'  # Use Node.js version 18
+      
+      # Step 3: Create .env file with environment secrets
+      - name: Create .env file
+        run: |
+          cd sinch-ds
+          echo "# Express related configuration" > .env
+          echo "port=3030" >> .env
+          echo "# Sinch Application credentials for Voice API" >> .env
+          echo "SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }}" >> .env
+          echo "SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }}" >> .env
+          echo "# Digital Samba Configuration" >> .env
+          echo "DIGITAL_SAMBA_TEAM_ID=${{ secrets.DIGITAL_SAMBA_TEAM_ID }}" >> .env
+          echo "DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }}" >> .env
+          echo "DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }}" >> .env
 
-      # Step 3: Install dependencies
+      # Step 4: Install dependencies
       - name: Install dependencies
         run: |
           cd sinch-ds
           npm install
       
+      # Step 5: Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
-
+      
+      # Step 6: Build and Push Docker Image
       - name: Build and Push Docker Image
         run: |
           docker build -t digitalsamba376/sinch-ds:latest ./sinch-ds
           docker push digitalsamba376/sinch-ds:latest
-
+      
+      # Step 7: Deploy to Server via SSH
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -48,6 +63,15 @@ jobs:
             sudo docker stop sinch-ds-dev || true
             sudo docker rm sinch-ds-dev || true
             sudo docker run -d --rm \
-                              --name sinch-ds-dev \
-                              -p 3030:3030 \
-                              digitalsamba376/sinch-ds:latest
+                            --name sinch-ds-dev \
+                            --network deployment_proxy \
+                            -p 3030:3030 \
+                            -e VIRTUAL_HOST=${{ secrets.DEV_HOST }} \
+                            -e LETSENCRYPT_HOST=${{ secrets.DEV_HOST }} \
+                            -e VIRTUAL_PORT=3030 \
+                            -e SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }} \
+                            -e SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }} \
+                            -e DIGITAL_SAMBA_TEAM_ID=${{ secrets.DIGITAL_SAMBA_TEAM_ID }} \
+                            -e DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }} \
+                            -e DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }} \
+                            digitalsamba376/sinch-ds:latest
