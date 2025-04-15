@@ -361,3 +361,62 @@ hr {
         width: 100%;
     }
 }
+
+/* Server Logs Section */
+.server-logs {
+    padding: 20px;
+    background-color: #f9f9f9; /* Light background for the section */
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-top: 20px;
+}
+
+.server-logs h1 {
+    margin-top: 0;
+    color: #333;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+.server-logs .actions {
+    margin-bottom: 15px;
+    text-align: right;
+}
+
+.log-content {
+    background-color: #2d2d2d; /* Dark background for log area */
+    color: #cccccc; /* Light grey text */
+    padding: 15px;
+    border-radius: 4px;
+    font-family: 'Courier New', Courier, monospace; /* Monospaced font */
+    font-size: 0.9em;
+    white-space: pre-wrap; /* Wrap long lines */
+    word-wrap: break-word; /* Break words if necessary */
+    max-height: 600px; /* Limit height and make scrollable */
+    overflow-y: auto; /* Add vertical scrollbar */
+    border: 1px solid #444; /* Subtle border */
+}
+
+/* Style for the refresh button if needed */
+.action-button {
+    padding: 8px 15px;
+    background-color: #5cb85c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.action-button:hover {
+    background-color: #4cae4c;
+}
+
+/* Ensure main sections are hidden by default unless active */
+.main-section {
+    display: none; /* Hide sections by default */
+}
+
+.main-section.active {
+    display: block; /* Show only the active section */
+}

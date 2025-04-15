@@ -1,385 +1,377 @@
-import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import db from './database.js';
+import dotenv from 'dotenv';
+import http from 'http'; // Import http module
+import { WebSocketServer } from 'ws'; // Import WebSocketServer
+
+import {
+    initializeDatabase,
+    // Functions needed for API routes
+    addConference,
+    getAllConferences,
+    deleteConference,
+    addUser,
+    getAllUsers,
+    getUsersByConference,
+    deleteUserByPin,
+    updateUserExternalId,
+    getAllConferencesWithUsers,
+    getAllLiveCallsWithUserInfo,
+    getLiveCallsByConferenceWithUserInfo,
+    getLiveCall
+} from './database.js';
 import { captureRawBody } from './middleware/rawbody.js';
 import sinchService from './services/sinchService.js';
 
-// Configure dotenv to load environment variables
 dotenv.config();
 
-// Import your voice controller and other modules
 import { voiceController } from './voice/controller.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const server = http.createServer(app); // Create HTTP server from Express app
 const PORT = process.env.PORT || 3030;
+const WS_PORT = process.env.WS_PORT || 3031; // Define a port for WebSocket server
 
-// Middleware
-app.use(cors());
+// --- WebSocket Server Setup ---
+const wss = new WebSocketServer({ port: WS_PORT });
+const clients = new Set(); // Keep track of connected clients
+const logBuffer = []; // Buffer to store recent logs
+const MAX_LOG_BUFFER = 100; // Max number of log lines to buffer
 
-// Apply raw body middleware only to the webhook endpoint
-// This middleware must be applied before any body-parser middleware
-app.use('/VoiceEvent', captureRawBody);
-
-// Apply JSON parsing middleware to all routes except webhook endpoint
-app.use((req, res, next) => {
-  if (req.path === '/VoiceEvent') {
-    // For webhook endpoint, we'll parse the body manually in the handler
-    return next();
-  }
-  express.json()(req, res, next);
-});
-
-app.use(express.static(path.join(__dirname, '../public')));
-
-// Initialize the voice controller
-voiceController(app, {
-  applicationKey: process.env.SINCH_APPLICATION_KEY,
-  applicationSecret: process.env.SINCH_APPLICATION_SECRET
-});
-
-// API routes for conferences
-app.post('/api/conference', (req, res) => {
-  const { conference_id, digitalsamba_room_id } = req.body;
-  
-  db.run(
-    'INSERT INTO conference (conference_id, digitalsamba_room_id) VALUES (?, ?)',
-    [conference_id, digitalsamba_room_id],
-    function(err) {
-      if (err) {
-        console.error('Error creating conference:', err);
-        return res.status(500).json({ error: 'Failed to create conference' });
-      }
-      res.status(201).json({ 
-        id: this.lastID, 
-        conference_id, 
-        digitalsamba_room_id 
-      });
-    }
-  );
-});
-
-app.get('/api/conferences', (req, res) => {
-  db.all('SELECT * FROM conference', (err, rows) => {
-    if (err) {
-      console.error('Error fetching conferences:', err);
-      return res.status(500).json({ error: 'Failed to fetch conferences' });
-    }
-    res.json(rows);
-  });
-});
-
-app.delete('/api/conference/:conference_id', (req, res) => {
-  const conference_id = req.params.conference_id;
-  
-  db.run('DELETE FROM users WHERE conference_id = ?', [conference_id], function(err) {
-    if (err) {
-      console.error('Error deleting users for conference:', err);
-      return res.status(500).json({ error: 'Failed to delete users for conference' });
-    }
-    
-    db.run('DELETE FROM conference WHERE conference_id = ?', [conference_id], function(err) {
-      if (err) {
-        console.error('Error deleting conference:', err);
-        return res.status(500).json({ error: 'Failed to delete conference' });
-      }
-      res.json({ message: 'Conference and associated users deleted successfully' });
+// Function to broadcast messages to all connected clients
+function broadcast(message) {
+    clients.forEach(client => {
+        if (client.readyState === client.OPEN) { // Use client.OPEN constant
+            client.send(message);
+        }
     });
-  });
-});
+}
 
-// API routes for users
-app.post('/api/user', (req, res) => {
-  const { conference_id, pin, display_name, external_id } = req.body;
-  
-  db.run(
-    'INSERT INTO users (conference_id, pin, display_name, external_id) VALUES (?, ?, ?, ?)',
-    [conference_id, pin, display_name, external_id],
-    function(err) {
-      if (err) {
-        console.error('Error creating user:', err);
-        return res.status(500).json({ error: 'Failed to create user' });
-      }
-      res.status(201).json({ 
-        id: this.lastID, 
-        conference_id, 
-        pin, 
-        display_name,
-        external_id
-      });
+// Function to add log to buffer and broadcast
+function logAndBroadcast(level, ...args) {
+    const timestamp = new Date().toISOString();
+    const message = args.map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : arg)).join(' ');
+    const logEntry = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+
+    // Add to buffer (and trim if necessary)
+    logBuffer.push(logEntry);
+    if (logBuffer.length > MAX_LOG_BUFFER) {
+        logBuffer.shift(); // Remove the oldest log entry
     }
-  );
-});
 
-app.get('/api/users', (req, res) => {
-  const { conference_id } = req.query;
-  
-  if (conference_id) {
-    db.all('SELECT * FROM users WHERE conference_id = ?', [conference_id], (err, rows) => {
-      if (err) {
-        console.error('Error fetching users for conference:', err);
-        return res.status(500).json({ error: 'Failed to fetch users' });
-      }
-      res.json(rows);
+    // Broadcast to WebSocket clients
+    broadcast(logEntry);
+
+    // Also log to the original console method
+    originalConsole[level](...args);
+}
+
+// Store original console methods
+const originalConsole = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+    info: console.info,
+    debug: console.debug,
+};
+
+// Override console methods
+console.log = (...args) => logAndBroadcast('log', ...args);
+console.warn = (...args) => logAndBroadcast('warn', ...args);
+console.error = (...args) => logAndBroadcast('error', ...args);
+console.info = (...args) => logAndBroadcast('info', ...args);
+console.debug = (...args) => logAndBroadcast('debug', ...args);
+
+
+wss.on('connection', (ws) => {
+    console.info('WebSocket client connected'); // Use overridden console.info
+    clients.add(ws);
+
+    // Send buffered logs to the newly connected client
+    ws.send(JSON.stringify({ type: 'buffer', data: logBuffer }));
+
+    ws.on('message', (message) => {
+        // Handle messages from clients if needed (e.g., commands)
+        console.info(`Received WebSocket message: ${message}`); // Use overridden console.info
     });
-  } else {
-    db.all('SELECT * FROM users', (err, rows) => {
-      if (err) {
-        console.error('Error fetching users:', err);
-        return res.status(500).json({ error: 'Failed to fetch users' });
-      }
-      res.json(rows);
+
+    ws.on('close', () => {
+        console.info('WebSocket client disconnected'); // Use overridden console.info
+        clients.delete(ws);
     });
-  }
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error); // Use overridden console.error
+        clients.delete(ws); // Remove client on error as well
+    });
 });
 
-app.delete('/api/user', (req, res) => {
-  const { pin } = req.body;
-  
-  db.run('DELETE FROM users WHERE pin = ?', [pin], function(err) {
-    if (err) {
-      console.error('Error deleting user:', err);
-      return res.status(500).json({ error: 'Failed to delete user' });
-    }
-    res.json({ message: 'User deleted successfully' });
-  });
-});
+console.info(`WebSocket server started on port ${WS_PORT}`); // Use overridden console.info
 
-// Add new endpoint to update user external_id
-app.patch('/api/user/:pin/external-id', (req, res) => {
-  const { pin } = req.params;
-  const { external_id } = req.body;
-  
-  db.run(
-    'UPDATE users SET external_id = ? WHERE pin = ?',
-    [external_id, pin],
-    function(err) {
-      if (err) {
-        console.error('Error updating user external_id:', err);
-        return res.status(500).json({ error: 'Failed to update user external_id' });
-      }
-      
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      
-      res.json({ 
-        message: 'User external_id updated successfully',
-        pin,
-        external_id
-      });
-    }
-  );
-});
+// --- Database Initialization --- 
+initializeDatabase().then(() => {
+    console.log("Database initialized successfully.");
 
-// Special endpoint to get conferences with their associated users
-app.get('/api/conferences-and-users', (req, res) => {
-  db.all('SELECT * FROM conference', (err, conferences) => {
-    if (err) {
-      console.error('Error fetching conferences:', err);
-      return res.status(500).json({ error: 'Failed to fetch conferences and users' });
-    }
-    
-    const promises = conferences.map(conference => {
-      return new Promise((resolve, reject) => {
-        db.all(
-          'SELECT * FROM users WHERE conference_id = ?', 
-          [conference.conference_id], 
-          (err, users) => {
-            if (err) {
-              reject(err);
+    // Middleware
+    app.use(cors());
+
+    // Conditionally apply body parsing middleware
+    app.use((req, res, next) => {
+        // Use startsWith to handle potential query parameters on the webhook URL
+        if (req.path === '/VoiceEvent') {
+            // For /VoiceEvent, use captureRawBody
+            captureRawBody(req, res, next);
+        } else {
+            // For all other routes, use express.json()
+            express.json()(req, res, next);
+        }
+    });
+
+    // Serve static files AFTER body parsing middleware
+    app.use(express.static(path.join(__dirname, '../public')));
+
+    // Initialize the voice controller (ensure it uses named imports if needed)
+    voiceController(app, {
+        applicationKey: process.env.SINCH_APPLICATION_KEY,
+        applicationSecret: process.env.SINCH_APPLICATION_SECRET
+    });
+
+    // --- API Routes (Should now work with imported functions) ---
+
+    // API routes for conferences
+    app.post('/api/conference', async (req, res) => {
+        const { conference_id, digitalsamba_room_id } = req.body;
+        try {
+            const result = await addConference({ conference_id, digitalsamba_room_id }); 
+            res.status(201).json({ 
+                id: result.id, // Assuming addConference returns the inserted ID
+                conference_id, 
+                digitalsamba_room_id 
+            });
+        } catch (err) {
+            console.error('Error creating conference:', err);
+            res.status(500).json({ error: 'Failed to create conference', message: err.message });
+        }
+    });
+
+    app.get('/api/conferences', async (req, res) => {
+        try {
+            const rows = await getAllConferences(); 
+            res.json(rows);
+        } catch (err) {
+            console.error('Error fetching conferences:', err);
+            res.status(500).json({ error: 'Failed to fetch conferences', message: err.message });
+        }
+    });
+
+    app.delete('/api/conference/:conference_id', async (req, res) => {
+        const conference_id = req.params.conference_id;
+        try {
+            const result = await deleteConference(conference_id); 
+            if (result.changes === 0) {
+                 return res.status(404).json({ message: 'Conference not found' });
+            }
+            res.json({ message: 'Conference and associated users deleted successfully' });
+        } catch (err) {
+            console.error('Error deleting conference:', err);
+            res.status(500).json({ error: 'Failed to delete conference', message: err.message });
+        }
+    });
+
+    // API routes for users
+    app.post('/api/user', async (req, res) => {
+        const { conference_id, pin, display_name, external_id } = req.body;
+        try {
+            const result = await addUser({ conference_id, pin, display_name, external_id });
+            res.status(201).json({ 
+                id: result.id, 
+                conference_id, 
+                pin, 
+                display_name,
+                external_id
+            });
+        } catch (err) {
+            console.error('Error creating user:', err);
+            res.status(500).json({ error: 'Failed to create user', message: err.message });
+        }
+    });
+
+    app.get('/api/users', async (req, res) => {
+        const { conference_id } = req.query;
+        try {
+            let rows;
+            if (conference_id) {
+                rows = await getUsersByConference(conference_id);
             } else {
-              resolve({
-                ...conference,
-                users: users
-              });
+                rows = await getAllUsers();
             }
-          }
-        );
-      });
+            res.json(rows);
+        } catch (err) {
+            console.error('Error fetching users:', err);
+            res.status(500).json({ error: 'Failed to fetch users', message: err.message });
+        }
     });
-    
-    Promise.all(promises)
-      .then(results => {
-        res.json(results);
-      })
-      .catch(error => {
-        console.error('Error fetching users for conferences:', error);
-        res.status(500).json({ error: 'Failed to fetch conferences and users' });
-      });
-  });
-});
 
-// Get all live calls with user information - include external_id in the query
-app.get('/api/live-calls', (req, res) => {
-    db.all(
-        `SELECT lc.id, lc.conference_id, lc.call_id, lc.start_time, lc.is_sip, lc.cli,
-                u.display_name, u.external_id
-         FROM live_calls lc 
-         LEFT JOIN users u ON lc.pin = u.pin 
-         ORDER BY lc.conference_id, lc.start_time DESC`,
-        (err, rows) => {
-            if (err) {
-                console.error('Error fetching live calls:', err);
-                return res.status(500).json({ error: 'Failed to fetch live calls' });
+    app.delete('/api/user', async (req, res) => {
+        const { pin } = req.body;
+        try {
+            const result = await deleteUserByPin(pin);
+             if (result.changes === 0) {
+                 return res.status(404).json({ message: 'User not found' });
             }
-            res.json(rows);
+            res.json({ message: 'User deleted successfully' });
+        } catch (err) {
+            console.error('Error deleting user:', err);
+            res.status(500).json({ error: 'Failed to delete user', message: err.message });
         }
-    );
-});
+    });
 
-// Get live calls for a specific conference - include external_id in the query
-app.get('/api/live-calls/:conference_id', (req, res) => {
-    const conference_id = req.params.conference_id;
-    
-    db.all(
-        `SELECT lc.id, lc.conference_id, lc.call_id, lc.start_time, lc.is_sip, lc.cli,
-                u.display_name, u.external_id
-         FROM live_calls lc 
-         LEFT JOIN users u ON lc.pin = u.pin 
-         WHERE lc.conference_id = ?
-         ORDER BY lc.start_time DESC`,
-        [conference_id],
-        (err, rows) => {
-            if (err) {
-                console.error('Error fetching live calls for conference:', err);
-                return res.status(500).json({ error: 'Failed to fetch live calls for conference' });
+    // Update user external_id
+    app.patch('/api/user/:pin/external-id', async (req, res) => {
+        const { pin } = req.params;
+        const { external_id } = req.body;
+        try {
+            const result = await updateUserExternalId(pin, external_id);
+            if (result.changes === 0) {
+                return res.status(404).json({ error: 'User not found' });
             }
+            res.json({ 
+                message: 'User external_id updated successfully',
+                pin,
+                external_id
+            });
+        } catch (err) {
+            console.error('Error updating user external_id:', err);
+            res.status(500).json({ error: 'Failed to update user external_id', message: err.message });
+        }
+    });
+
+    // Get conferences with their associated users
+    app.get('/api/conferences-and-users', async (req, res) => {
+        try {
+            const results = await getAllConferencesWithUsers();
+            res.json(results);
+        } catch (error) {
+            console.error('Error fetching conferences and users:', error);
+            res.status(500).json({ error: 'Failed to fetch conferences and users', message: error.message });
+        }
+    });
+
+    // Get all live calls with user information
+    app.get('/api/live-calls', async (req, res) => {
+        try {
+            const rows = await getAllLiveCallsWithUserInfo();
             res.json(rows);
+        } catch (err) {
+            console.error('Error fetching live calls:', err);
+            res.status(500).json({ error: 'Failed to fetch live calls', message: err.message });
         }
-    );
-});
+    });
 
-// Mute a call - Integrates with the Sinch API
-app.post('/api/call/:call_id/mute', async (req, res) => {
-    const call_id = req.params.call_id;
-    
-    try {
-        // Get the call information including conference ID
-        const livecall = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM live_calls WHERE call_id = ?', [call_id], (err, row) => {
-                if (err) return reject(err);
-                if (!row) return reject(new Error('Call not found'));
-                resolve(row);
-            });
-        });
-        
-        if (!livecall) {
-            return res.status(404).json({ error: 'Call not found' });
+    // Get live calls for a specific conference
+    app.get('/api/live-calls/:conference_id', async (req, res) => {
+        const conference_id = req.params.conference_id;
+        try {
+            const rows = await getLiveCallsByConferenceWithUserInfo(conference_id);
+            res.json(rows);
+        } catch (err) {
+            console.error('Error fetching live calls for conference:', err);
+            res.status(500).json({ error: 'Failed to fetch live calls for conference', message: err.message });
         }
-        
-        // Call the Sinch API service to mute the participant
-        const result = await sinchService.muteParticipant(livecall.conference_id, call_id);
-        
-        if (!result.success) {
-            return res.status(result.status || 500).json({
-                error: 'Failed to mute participant',
-                sinchError: result.error,
-                endpoint: result.endpoint
-            });
-        }
-        
-        console.log(`Successfully muted call: ${call_id} in conference ${livecall.conference_id}`);
-        res.json({ success: true, message: 'Call muted' });
-    } catch (error) {
-        console.error('Error muting call:', error);
-        res.status(500).json({ error: 'Failed to mute call', message: error.message });
-    }
-});
+    });
 
-// Unmute a call - Integrates with the Sinch API
-app.post('/api/call/:call_id/unmute', async (req, res) => {
-    const call_id = req.params.call_id;
-    
-    try {
-        // Get the call information including conference ID
-        const livecall = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM live_calls WHERE call_id = ?', [call_id], (err, row) => {
-                if (err) return reject(err);
-                if (!row) return reject(new Error('Call not found'));
-                resolve(row);
-            });
-        });
-        
-        if (!livecall) {
-            return res.status(404).json({ error: 'Call not found' });
+    // Mute a call
+    app.post('/api/call/:call_id/mute', async (req, res) => {
+        const call_id = req.params.call_id;
+        try {
+            const livecall = await getLiveCall(call_id);
+            if (!livecall) {
+                return res.status(404).json({ error: 'Call not found' });
+            }
+            
+            const result = await sinchService.muteParticipant(livecall.conference_id, call_id);
+            
+            if (!result.success) {
+                return res.status(result.status || 500).json({
+                    error: 'Failed to mute participant',
+                    sinchError: result.error,
+                    endpoint: result.endpoint
+                });
+            }
+            
+            console.log(`Successfully muted call: ${call_id} in conference ${livecall.conference_id}`);
+            res.json({ success: true, message: 'Call muted' });
+        } catch (error) {
+            console.error('Error muting call:', error);
+            res.status(500).json({ error: 'Failed to mute call', message: error.message });
         }
-        
-        // Call the Sinch API service to unmute the participant
-        const result = await sinchService.unmuteParticipant(livecall.conference_id, call_id);
-        
-        if (!result.success) {
-            return res.status(result.status || 500).json({
-                error: 'Failed to unmute participant',
-                sinchError: result.error,
-                endpoint: result.endpoint
-            });
-        }
-        
-        console.log(`Successfully unmuted call: ${call_id} in conference ${livecall.conference_id}`);
-        res.json({ success: true, message: 'Call unmuted' });
-    } catch (error) {
-        console.error('Error unmuting call:', error);
-        res.status(500).json({ error: 'Failed to unmute call', message: error.message });
-    }
-});
+    });
 
-// Kick a call - Integrates with the Sinch API to kick a participant from a conference
-app.post('/api/call/:call_id/kick', async (req, res) => {
-    const call_id = req.params.call_id;
-    
-    try {
-        // First, get the call information including conference ID
-        const livecall = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM live_calls WHERE call_id = ?', [call_id], (err, row) => {
-                if (err) return reject(err);
-                if (!row) return reject(new Error('Call not found'));
-                resolve(row);
-            });
-        });
-        
-        if (!livecall) {
-            return res.status(404).json({ error: 'Call not found' });
+    // Unmute a call
+    app.post('/api/call/:call_id/unmute', async (req, res) => {
+        const call_id = req.params.call_id;
+        try {
+            const livecall = await getLiveCall(call_id);
+            if (!livecall) {
+                return res.status(404).json({ error: 'Call not found' });
+            }
+            
+            const result = await sinchService.unmuteParticipant(livecall.conference_id, call_id);
+            
+            if (!result.success) {
+                return res.status(result.status || 500).json({
+                    error: 'Failed to unmute participant',
+                    sinchError: result.error,
+                    endpoint: result.endpoint
+                });
+            }
+            
+            console.log(`Successfully unmuted call: ${call_id} in conference ${livecall.conference_id}`);
+            res.json({ success: true, message: 'Call unmuted' });
+        } catch (error) {
+            console.error('Error unmuting call:', error);
+            res.status(500).json({ error: 'Failed to unmute call', message: error.message });
         }
-        
-        // Call the Sinch API service to kick the participant
-        const result = await sinchService.kickParticipant(livecall.conference_id, call_id);
-        
-        if (!result.success) {
-            return res.status(result.status || 500).json({
-                error: 'Failed to kick participant from Sinch conference',
-                sinchError: result.error,
-                endpoint: result.endpoint
-            });
-        }
-        
-        // If Sinch API call was successful, remove the call from our database
-        db.run('DELETE FROM live_calls WHERE call_id = ?', [call_id], function(err) {
-            if (err) {
-                console.error('Error removing call from database:', err);
-                // Even if DB update fails, we return success since the kick was successful
+    });
+
+    // Kick a participant
+    app.post('/api/call/:call_id/kick', async (req, res) => {
+        const call_id = req.params.call_id;
+        try {
+            const livecall = await getLiveCall(call_id);
+            if (!livecall) {
+                return res.status(404).json({ error: 'Call not found' });
+            }
+            
+            const result = await sinchService.kickParticipant(livecall.conference_id, call_id);
+            
+            if (!result.success) {
+                return res.status(result.status || 500).json({
+                    error: 'Failed to kick participant',
+                    sinchError: result.error,
+                    endpoint: result.endpoint
+                });
             }
             
             console.log(`Successfully kicked call: ${call_id} from conference ${livecall.conference_id}`);
-            res.json({ 
-                success: true, 
-                message: 'Call kicked from conference', 
-                removed: this.changes > 0 
-            });
-        });
-        
-    } catch (error) {
-        console.error('Error kicking call:', error);
-        res.status(500).json({ error: 'Failed to kick call', message: error.message });
-    }
-});
+            res.json({ success: true, message: 'Participant kicked' });
+        } catch (error) {
+            console.error('Error kicking participant:', error);
+            res.status(500).json({ error: 'Failed to kick participant', message: error.message });
+        }
+    });
 
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+    // Start the HTTP server (using the 'server' instance)
+    server.listen(PORT, () => { // Use server.listen instead of app.listen
+        console.log(`HTTP Server listening on port ${PORT}`); // Use overridden console.log
+    });
+
+}).catch(err => {
+    console.error("Failed to initialize database:", err); // Use overridden console.error
+    process.exit(1); // Exit if DB initialization fails
 });

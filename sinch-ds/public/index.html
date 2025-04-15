@@ -19,6 +19,7 @@
         <div class="primary-nav">
             <button class="primary-tab active" data-section="conference-management">Conference Management</button>
             <button class="primary-tab" data-section="active-calls">Active Calls</button>
+            <button class="primary-tab" data-section="server-logs">Server Logs</button> <!-- Added Server Logs tab -->
         </div>
 
         <div id="notification" class="notification"></div>
@@ -117,6 +118,14 @@
                 <div id="active-calls-list"></div>
             </div>
         </section>
+
+        <!-- Server Logs Section -->
+        <section id="server-logs" class="main-section">
+            <div class="server-logs">
+                <h1>Server Logs (Real-time)</h1>
+                <pre id="server-logs-content" class="log-content">Connecting to log stream...</pre> <!-- Use <pre> for formatted logs -->
+            </div>
+        </section>
     </div>
 
     <script>
@@ -139,22 +148,25 @@
                 // Show the selected section
                 const sectionId = this.dataset.section;
                 document.getElementById(sectionId).classList.add('active');
-                
-                // If switching to active calls, load them
+
+                // Stop any existing intervals
+                if (window.refreshInterval) {
+                    clearInterval(window.refreshInterval);
+                    window.refreshInterval = null;
+                }
+                if (window.logRefreshInterval) {
+                    clearInterval(window.logRefreshInterval);
+                    window.logRefreshInterval = null;
+                }
+
+                // Handle specific section logic
                 if (sectionId === 'active-calls') {
                     loadActiveCalls();
-                    
                     // Start auto-refresh for active calls
-                    if (window.refreshInterval) {
-                        clearInterval(window.refreshInterval);
-                    }
                     window.refreshInterval = setInterval(loadActiveCalls, 10000);
-                } else {
-                    // Stop auto-refresh when not on active calls
-                    if (window.refreshInterval) {
-                        clearInterval(window.refreshInterval);
-                        window.refreshInterval = null;
-                    }
+                } else if (sectionId === 'server-logs') {
+                    // Optional: Start auto-refresh for logs (e.g., every 15 seconds)
+                    // window.logRefreshInterval = setInterval(loadServerLogs, 15000);
                 }
             });
         });
@@ -483,7 +495,7 @@
 
         // Event listener for refresh button in the Active Calls tab
         document.getElementById('refresh-calls').addEventListener('click', loadActiveCalls);
-        
+
         async function loadPins(conference_id) {
             const response = await fetch(`/api/users?conference_id=${conference_id}`);
             const users = await response.json();
@@ -504,11 +516,118 @@
 
         // Load conferences and users when the page loads
         loadConferencesAndUsers();
-        
-        // Clean up interval when page is unloaded
+
+        // --- WebSocket Log Streaming ---
+        let logWebSocket = null;
+        const logContentElement = document.getElementById('server-logs-content');
+        const WS_PORT = 3031; // Make sure this matches the WS_PORT in server.js
+        const wsUrl = `ws://${window.location.hostname}:${WS_PORT}`;
+
+        function connectWebSocket() {
+            logWebSocket = new WebSocket(wsUrl);
+
+            logWebSocket.onopen = () => {
+                console.log('WebSocket connection opened');
+                logContentElement.textContent = 'Connected to log stream. Waiting for logs...';
+            };
+
+            logWebSocket.onmessage = (event) => {
+                try {
+                    const messageData = JSON.parse(event.data);
+                    // Handle initial buffer dump
+                    if (messageData.type === 'buffer' && Array.isArray(messageData.data)) {
+                        logContentElement.textContent = messageData.data.join('\n') + '\n';
+                    } else {
+                        // Append regular log message (assuming it's a string)
+                        appendLog(event.data);
+                    }
+                } catch (e) {
+                    // If JSON parsing fails, assume it's a regular log string
+                    appendLog(event.data);
+                }
+                // Auto-scroll to the bottom
+                logContentElement.scrollTop = logContentElement.scrollHeight;
+            };
+
+            logWebSocket.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                appendLog(`--- WebSocket Error: ${error.message || 'Connection failed'}. Attempting to reconnect... ---`);
+                // Optional: Implement retry logic here
+            };
+
+            logWebSocket.onclose = () => {
+                console.log('WebSocket connection closed');
+                appendLog('--- WebSocket connection closed. Attempting to reconnect... ---');
+                // Simple reconnect logic (try every 5 seconds)
+                setTimeout(connectWebSocket, 5000);
+            };
+        }
+
+        function appendLog(logLine) {
+            // Sanitize potentially harmful HTML before appending
+            const sanitizedLine = logLine.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            logContentElement.textContent += sanitizedLine + '\n';
+            // Keep scroll at the bottom if user hasn't scrolled up
+            // Add a small threshold to allow for minor scrolling
+            if (logContentElement.scrollHeight - logContentElement.scrollTop <= logContentElement.clientHeight + 20) {
+                 logContentElement.scrollTop = logContentElement.scrollHeight;
+            }
+        }
+
+        // Modify the primary tab click handler to connect/disconnect WebSocket
+        document.querySelectorAll('.primary-tab').forEach(tab => {
+            tab.removeEventListener('click', handlePrimaryTabClick); // Remove old listener if exists
+            tab.addEventListener('click', handlePrimaryTabClick); // Add new listener
+        });
+
+        function handlePrimaryTabClick() {
+            // Remove active class from all primary tabs
+            document.querySelectorAll('.primary-tab').forEach(t => t.classList.remove('active'));
+            // Add active class to clicked tab
+            this.classList.add('active');
+            // Hide all main sections
+            document.querySelectorAll('.main-section').forEach(section => section.classList.remove('active'));
+            // Show the selected section
+            const sectionId = this.dataset.section;
+            document.getElementById(sectionId).classList.add('active');
+
+            // Stop any existing intervals (like active calls refresh)
+            if (window.refreshInterval) {
+                clearInterval(window.refreshInterval);
+                window.refreshInterval = null;
+            }
+            // Disconnect WebSocket if navigating away from logs
+            if (sectionId !== 'server-logs' && logWebSocket && logWebSocket.readyState === WebSocket.OPEN) {
+                console.log('Closing WebSocket connection.');
+                logWebSocket.close();
+                logWebSocket = null;
+            }
+
+            // Handle specific section logic
+            if (sectionId === 'active-calls') {
+                loadActiveCalls();
+                // Start auto-refresh for active calls
+                window.refreshInterval = setInterval(loadActiveCalls, 10000);
+            } else if (sectionId === 'server-logs') {
+                // Connect WebSocket only if not already connected or connection is closed
+                if (!logWebSocket || logWebSocket.readyState === WebSocket.CLOSED) {
+                    connectWebSocket();
+                }
+            }
+        }
+
+        // Initial setup: If the default active tab is server-logs, connect WebSocket
+        if (document.querySelector('.primary-tab.active').dataset.section === 'server-logs') {
+            connectWebSocket();
+        }
+
+        // Clean up WebSocket on page unload
         window.addEventListener('beforeunload', () => {
             if (window.refreshInterval) {
                 clearInterval(window.refreshInterval);
+            }
+            if (logWebSocket && logWebSocket.readyState === WebSocket.OPEN) {
+                logWebSocket.close();
             }
         });
     </script>

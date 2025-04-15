@@ -60,6 +60,9 @@ export const notifyPhoneParticipantJoined = async (roomId, participant) => {
     // Send as an array as required by the API
     const payload = [formattedParticipant];
     
+    // Log the payload being sent to Digital Samba
+    console.log(`Payload sent to Digital Samba: ${JSON.stringify(payload, null, 2)}`);
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {

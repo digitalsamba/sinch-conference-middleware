@@ -1,2 +1,3 @@
 .env
 sinch-ds/node_modules/
+sinch-ds/conference_data.db # Ignore SQLite database

@@ -1,294 +1,137 @@
-# Digital Samba Sinch Conference Middleware Demo
+# Sinch Conference Middleware
 
-The demo application in the `sinch-ds` folder demonstrates how to use the Sinch Voice API to handle incoming calls, prompt users for a PIN, and connect them to a conference based on the provided PIN.
-
-The application can then notify the Digital Samba API when a phone user joins or leaves a conference. The application can also control the connected phone user via callbacks from Digital Samba.
-
-A sqlite database is created with the following structure:
-
-```plaintext
-CONFERENCE : id, conference_id, digitalsamba_room_id
-USERS : id, conference_id, pin, display_name, external_id
-LIVE_CALLS : id, conference_id, call_id, pin, is_sip, start_time, cli
-```
-
-NOTE: Conference IDs and user PINs are constructed on the demo application side.
-
-Conference IDs and user PINs are enforced to be unique by the database so that phone users and the SIP connection can be directed to the correct conference via the application's logic.
-
-Conferences can be created via the application's UI or its API.
-
-### API Endpoints
-
-#### Conference Endpoints
-
-##### GET /api/conferences
-
-Retrieves a list of all conferences.
-
-##### POST /api/conference
-
-Creates a new conference with the provided conference_id and optional digitalsamba_room_id.
-
-##### GET /api/conferences-and-users
-
-Retrieves a list of all conferences with their associated users.
-
-##### DELETE /api/conference/:conference_id
-
-Deletes a specific conference by its ID and all associated users.
-
-#### User Endpoints
-
-##### GET /api/users
-
-Retrieves a list of all users, or users filtered by conference_id if provided as a query parameter.
-
-##### POST /api/user
-
-Creates a new user with the provided conference_id, pin, optional display_name, and optional external_id.
-
-##### PATCH /api/user/:pin/external-id
-
-Updates the external_id for a user with the specified PIN.
-
-##### DELETE /api/user
-
-Deletes a specific user by their PIN.
-
-#### Live Calls Endpoints
-
-##### GET /api/live-calls
-
-Retrieves a list of all active calls with user information.
-
-##### GET /api/live-calls/:conference_id
-
-Retrieves a list of all active calls for a specific conference.
-
-##### POST /api/call/:call_id/mute
-
-Mutes a specific call in a conference.
-
-##### POST /api/call/:call_id/unmute
-
-Unmutes a specific call in a conference.
-
-##### POST /api/call/:call_id/kick
-
-Removes a specific call from a conference.
-
-----
-
-When a phone user joins a conference, they are prompted for a PIN which is checked against the database. If the PIN exists, the phone user is connected to the relevant conference and Digital Samba is notified by passing the room_id, call_id, display_name and external_id to the phone_user_joined API call.
-
-## Digital Samba API Integration
-
-The application integrates with the Digital Samba API to provide real-time notifications about phone participants joining and leaving Digital Samba rooms. This integration is handled by the `digitalSambaService.js` module.
-
-### Key Features
-
-- **Authentication**: Uses Bearer token authentication with Digital Samba developer API key
-- **Participant Join Notification**: Notifies Digital Samba when phone participants join a room
-  - Sends participant details including call ID, phone number, name, and external ID
-- **Participant Leave Notification**: Notifies Digital Samba when phone participants leave a room
-  - Sends the call ID of the participant that left
-
-### API Endpoints
-
-The integration uses the following Digital Samba API endpoints:
-
-- `/api/v1/rooms/{roomId}/phone-participants/joined`: Notifies when phone participants join a room
-- `/api/v1/rooms/{roomId}/phone-participants/left`: Notifies when phone participants leave a room
+This project provides a middleware service to manage Sinch voice conferences, integrating with Digital Samba for enhanced features. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), and provides a simple web UI for interaction.
 
 ## Features
 
-- Handles Incoming Call Events (ICE)
-- Prompts users for a PIN using DTMF input
-- Handles Prompt Input Events (PIE)
-- Validates the PIN against a database
-- Connects users to a conference if the PIN is valid
-- Handles Disconnected Call Events (DICE)
-- Creates Digital Samba rooms via API, providing telephone number and PIN for SIP connection
-- Notifies Digital Samba API about phone user joined events
-- Notifies Digital Samba API about phone user left events
-- Supports muting phone users via Digital Samba callbacks
-- Supports unmuting phone users via Digital Samba callbacks
-- Supports kicking phone users via Digital Samba callbacks
-- Supports associating an external ID with users for use with Digital Samba API
+*   **Conference Management:** Create, list, and delete conferences.
+*   **User Management:** Add users (with PINs, display names, external IDs) to conferences, list users, remove users.
+*   **Sinch Callback Handling:** Processes ICE, ACE, and DICE events from Sinch.
+*   **Live Call Management:** View active calls per conference, mute, unmute, and kick participants via the UI.
+*   **Digital Samba Integration (Optional):** Associates Sinch conferences with Digital Samba room IDs.
+*   **Database Persistence:** Stores conference and user data in SQLite.
+*   **Web UI:** Simple frontend for managing conferences, users, and viewing active calls.
+*   **Real-time server log streaming via WebSockets to the frontend UI.**
+*   **Docker Support:** Includes a Dockerfile for containerized deployment.
+*   **GitHub Actions CI/CD:** Automated build, test (placeholder), and Docker image push to GitHub Packages.
 
 ## Prerequisites
 
-- Node.js (version 14 or higher)
-- npm (Node Package Manager)
-- Sinch account and application key
-- Digital Samba account with telephony enabled and developer keys
+*   Node.js (v18 or later recommended)
+*   npm
+*   Sinch Account (Application Key and Secret)
+*   (Optional) Docker
 
-## Installation
+## Environment Variables
 
-1. Clone the repository:
+Create a `.env` file in the `sinch-ds` directory with the following variables:
 
-    ```sh
-    git clone https://github.com/yourusername/sinch-conference-middleware.git
+```env
+# Sinch API Credentials
+SINCH_APPLICATION_KEY=YOUR_SINCH_APP_KEY
+SINCH_APPLICATION_SECRET=YOUR_SINCH_APP_SECRET
+
+# Server Configuration
+PORT=3030 # Optional: Port for the HTTP server (defaults to 3030)
+WS_PORT=3031 # Optional: Port for the WebSocket log server (defaults to 3031)
+
+# Database Configuration
+DATABASE_PATH=./conference_data.db # Optional: Path to the SQLite database file
+
+# Digital Samba Configuration (Optional)
+DIGITAL_SAMBA_API_KEY=YOUR_DS_API_KEY
+DIGITAL_SAMBA_API_SECRET=YOUR_DS_API_SECRET
+DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API endpoint
+```
+
+## Setup and Running
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
     cd sinch-conference-middleware/sinch-ds
     ```
-
-2. Set up environment variables:
-
-    Create a `.env` file in the root of the [`sinch-ds`](sinch-ds) folder and add the following variables:
-
-    ```plaintext
-    SINCH_APPLICATION_KEY=your_sinch_application_key
-    SINCH_APPLICATION_SECRET=your_sinch_application_secret
-    DIGITAL_SAMBA_DEVELOPER_KEY=your_digital_samba_developer_key
-    DIGITAL_SAMBA_API_URL=your_digital_samba_api_url
+2.  **Install dependencies:**
+    ```bash
+    npm install
     ```
-
-## Usage
-
-1. Start the server:
-
-    ```sh
+3.  **Create and populate the `.env` file** in the `sinch-ds` directory as described above.
+4.  **Start the server:**
+    ```bash
     npm start
     ```
+    The server will start on `http://localhost:3030` (or the `PORT` specified in `.env`). The WebSocket server for logs will start on port 3031 (or the `WS_PORT` specified).
+5.  **Access the UI:** Open your browser and navigate to `http://localhost:3030`.
 
-2. The server will start on `http://localhost:3030`.
+## API Endpoints
 
-3. Configure your Sinch application to use callback URL `http://your-server-ip:3030/VoiceEvent` to handle voice events.
-
-4. Configure Digital Samba to send user control callbacks to `http://your-server-ip:3030/samba/callback`.
+*   `/api/conference` (POST): Create a new conference.
+*   `/api/conferences` (GET): List all conferences.
+*   `/api/conference/:conference_id` (DELETE): Delete a conference.
+*   `/api/user` (POST): Add a user to a conference.
+*   `/api/users` (GET): List all users or users by conference (`?conference_id=...`).
+*   `/api/user` (DELETE): Remove a user by PIN.
+*   `/api/user/:pin/external-id` (PATCH): Update a user's external ID.
+*   `/api/conferences-and-users` (GET): List conferences with their associated users.
+*   `/api/live-calls` (GET): List all currently active calls with user info.
+*   `/api/live-calls/:conference_id` (GET): List active calls for a specific conference.
+*   `/api/call/:call_id/mute` (POST): Mute a participant in a conference.
+*   `/api/call/:call_id/unmute` (POST): Unmute a participant in a conference.
+*   `/api/call/:call_id/kick` (POST): Kick a participant from a conference.
+*   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, ACE, DICE).
 
 ## Docker Support
 
-You can build and run the application using Docker.
+A `Dockerfile` is provided in the `sinch-ds` directory for building a container image.
 
-1. Build the Docker image:
-
-    ```sh
-    docker build -t sinch-conference-middleware . 
+1.  **Build the image:**
+    ```bash
+    cd sinch-ds
+    docker build -t sinch-conference-middleware .
     ```
-
-2. Run the Docker container:
-
-    ```sh
-    docker run -d -p 3030:3030 --env-file .env sinch-conference-middleware
+2.  **Run the container:**
+    *Make sure you have a `.env` file in the `sinch-ds` directory.*
+    ```bash
+    # For Linux/macOS:
+    docker run -p 3030:3030 -p 3031:3031 --env-file .env -v "$(pwd)/conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
+    # For Windows (Command Prompt):
+    docker run -p 3030:3030 -p 3031:3031 --env-file .env -v "%cd%\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
+    # For Windows (PowerShell):
+    docker run -p 3030:3030 -p 3031:3031 --env-file .env -v "${PWD}\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     ```
+    *   `-p 3030:3030`: Maps the host port 3030 to the container's HTTP port.
+    *   `-p 3031:3031`: Maps the host port 3031 to the container's WebSocket port.
+    *   `--env-file .env`: Loads environment variables from your local `.env` file.
+    *   `-v .../conference_data.db:/app/conference_data.db`: Mounts the local database file into the container for persistence. Create an empty `conference_data.db` file first if it doesn't exist (`touch conference_data.db` or `type nul > conference_data.db` on Windows).
+    *   `--name sinch-middleware`: Assigns a name to the container.
 
-## Auto Deployment using GitHub Actions
+## GitHub Actions CI/CD
 
-You can automate the deployment of the application to a server using GitHub Actions. Ensure you have SSH access to the server and the necessary permissions.
+This repository uses GitHub Actions for continuous integration and deployment. The workflow (`.github/workflows/main.yml`) performs the following:
 
-1. Create a GitHub Actions workflow file (`.github/workflows/main.yml`):
+1.  **Checkout:** Checks out the code.
+2.  **Set up Node.js:** Installs the specified Node.js version.
+3.  **Install Dependencies:** Runs `npm install` in the `sinch-ds` directory.
+4.  **Lint Check:** Runs ESLint (if configured).
+5.  **Run Tests:** Executes tests (currently a placeholder `npm test`).
+6.  **Login to GitHub Container Registry:** Logs into `ghcr.io`.
+7.  **Create .env file:** Creates a temporary `.env` file using secrets for the Docker build.
+8.  **Build and Push Docker Image:** Builds the Docker image (using the created `.env` file) and pushes it to `ghcr.io/<your-github-username>/sinch-conference-middleware`.
 
-    ```yaml
-    name: Deploy sinch-ds
+**Note:** You need to configure the following secrets in your GitHub repository settings (`Settings > Secrets and variables > Actions`) for the Docker build and push to work:
+*   `SINCH_APPLICATION_KEY`
+*   `SINCH_APPLICATION_SECRET`
+*   `PORT` (optional, defaults to 3030 in the action)
+*   `WS_PORT` (optional, defaults to 3031 in the action)
+*   `DATABASE_PATH` (optional, defaults to `./conference_data.db` in the action)
+*   `DIGITAL_SAMBA_API_KEY` (optional)
+*   `DIGITAL_SAMBA_API_SECRET` (optional)
+*   `DIGITAL_SAMBA_API_URL` (optional)
 
-    on:
-      push:
-        branches:
-          - main  # Change to your deployment branch if needed
+## Contributing
 
-    jobs:
-      build:
-        runs-on: ubuntu-latest
-
-        steps:
-        - name: Checkout code
-          uses: actions/checkout@v3
-
-        - name: Set up Node.js
-          uses: actions/setup-node@v3
-          with:
-            node-version: '18'  # Use Node.js version 18
-
-        - name: Install dependencies
-          run: |
-            cd sinch-ds
-            npm install
-
-        - name: Log in to Docker Hub
-          uses: docker/login-action@v3
-          with:
-            username: ${{ secrets.DOCKER_HUB_USERNAME }}
-            password: ${{ secrets.DOCKER_HUB_TOKEN }}
-
-        - name: Build and Push Docker Image
-          run: |
-            docker build -t digitalsamba376/sinch-ds:latest ./sinch-ds
-            docker push digitalsamba376/sinch-ds:latest
-
-        - name: Deploy to Server via SSH
-          uses: appleboy/ssh-action@v1.0.3
-          with:
-            host: ${{ secrets.SERVER_HOST }}
-            username: ${{ secrets.SERVER_USER }}
-            key: ${{ secrets.SERVER_SSH_KEY }}
-            script: |
-              # Create .env file on the server
-              echo "SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }}" > /path/to/.env
-              echo "SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }}" >> /path/to/.env
-              echo "DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }}" >> /path/to/.env
-              echo "DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }}" >> /path/to/.env
-              echo "PORT=${{ secrets.PORT }}" >> /path/to/.env
-
-              # Pull the latest Docker image
-              sudo docker pull digitalsamba376/sinch-ds:latest
-
-              # Stop and remove the existing container if it exists
-              sudo docker stop sinch-ds-dev || true
-              sudo docker rm sinch-ds-dev || true
-
-              # Run the new container
-              sudo docker run -d --rm \
-                                --name sinch-ds-dev \
-                                -p 3030:3030 \
-                                --env-file /path/to/.env \
-                                digitalsamba376/sinch-ds:latest
-    ```
-
-2. Add the necessary secrets to your GitHub repository:
-
-    - `DOCKER_HUB_USERNAME`: Your DockerHub username
-    - `DOCKER_HUB_TOKEN`: Your DockerHub token
-    - `SERVER_HOST`: The IP address of the server
-    - `SERVER_USER`: The username for accessing the server
-    - `SERVER_SSH_KEY`: Your SSH private key for accessing the server
-    - `SINCH_APPLICATION_KEY`: Your Sinch application key
-    - `SINCH_APPLICATION_SECRET`: Your Sinch application secret
-    - `DIGITAL_SAMBA_DEVELOPER_KEY`: Your Digital Samba developer key
-    - `DIGITAL_SAMBA_API_URL`: Your Digital Samba API URL
-    - `PORT`: The port number (e.g., 3030)
-
-## Project Structure
-
-```plaintext
-sinch-ds/
-├── src/
-│   ├── voice/
-│   │   ├── controller.js
-│   │   ├── serverBusinessLogic.js
-│   │   ├── validateSignature.js
-│   ├── middleware/
-│   │   └── rawbody.js
-│   ├── services/
-│   │   ├── digitalSambaService.js
-│   │   └── sinchService.js
-│   ├── database.js
-│   └── server.js
-├── .env
-├── Dockerfile
-├── .github/
-│   └── workflows/
-│       └── main.yml
-├── package.json
-└── README.md
-```
+Contributions are welcome! Please feel free to submit pull requests or open issues.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-## Acknowledgements
-
-Sinch for providing the Voice API  
-Digital Samba for their telephony and conferencing API
+[MIT](LICENSE)

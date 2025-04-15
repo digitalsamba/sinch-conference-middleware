@@ -1,252 +1,251 @@
 import sqlite3 from 'sqlite3';
-const db = new sqlite3.Database(':memory:');
+import { open } from 'sqlite';
+import dotenv from 'dotenv';
 
-db.serialize(() => {
-    // Create conferences table with the digitalsamba_room_id field
-    db.run('CREATE TABLE conference (id INTEGER PRIMARY KEY AUTOINCREMENT, conference_id TEXT NOT NULL UNIQUE CHECK(length(conference_id) <= 64), digitalsamba_room_id TEXT)');
-    
-    // Create users table with external_id field added
-    db.run('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, conference_id TEXT NOT NULL, pin INTEGER NOT NULL UNIQUE, display_name TEXT, external_id TEXT, FOREIGN KEY(conference_id) REFERENCES conference(conference_id))');
-    
-    // Create live_calls table to track active calls
-    // Modified to store ISO string timestamp for better compatibility
-    // Added cli field to store caller number
-    db.run(`CREATE TABLE live_calls (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conference_id TEXT NOT NULL,
-        call_id TEXT NOT NULL UNIQUE,
-        pin INTEGER,
-        is_sip BOOLEAN DEFAULT 0,
-        start_time TEXT,
-        cli TEXT,
-        FOREIGN KEY(conference_id) REFERENCES conference(conference_id),
-        FOREIGN KEY(pin) REFERENCES users(pin)
-    )`);
-    
-    // Create index on digitalsamba_room_id for faster lookups
-    db.run('CREATE INDEX idx_conference_digitalsamba_room_id ON conference(digitalsamba_room_id)');
-    
-    // Create index on call_id for faster lookups
-    db.run('CREATE INDEX idx_live_calls_call_id ON live_calls(call_id)');
-});
+dotenv.config();
 
-// Helper functions for database operations
+const verboseSqlite3 = sqlite3.verbose();
+let db;
 
-// Conference operations
-export const createConference = (conferenceData) => {
-    return new Promise((resolve, reject) => {
-        const { conference_id, digitalsamba_room_id = null } = conferenceData;
-        
-        db.run(
-            'INSERT INTO conference (conference_id, digitalsamba_room_id) VALUES (?, ?)',
-            [conference_id, digitalsamba_room_id],
-            function(err) {
-                if (err) return reject(err);
-                resolve({ id: this.lastID, conference_id, digitalsamba_room_id });
+// Use named export directly
+export const initializeDatabase = async () => {
+    try {
+        db = await open({
+            filename: process.env.DATABASE_PATH || './conference_data.db',
+            driver: verboseSqlite3.Database
+        });
+
+        console.log('Connected to the SQLite database.');
+
+        await db.exec('BEGIN TRANSACTION');
+        await db.exec('PRAGMA foreign_keys = ON;');
+
+        // Create tables if they don't exist
+        await db.exec(`CREATE TABLE IF NOT EXISTS conference (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            conference_id TEXT NOT NULL UNIQUE CHECK(length(conference_id) <= 64), 
+            digitalsamba_room_id TEXT,
+            ds_pstn_notified BOOLEAN DEFAULT 0 
+        )`);
+        await db.exec(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            pin INTEGER NOT NULL UNIQUE, 
+            conference_id TEXT NOT NULL, 
+            display_name TEXT, 
+            external_id TEXT, 
+            FOREIGN KEY(conference_id) REFERENCES conference(conference_id) ON DELETE CASCADE
+        )`); // Added ON DELETE CASCADE
+        await db.exec(`CREATE TABLE IF NOT EXISTS live_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conference_id TEXT NOT NULL,
+            call_id TEXT NOT NULL UNIQUE,
+            pin INTEGER,
+            is_sip BOOLEAN DEFAULT 0, 
+            cli TEXT,
+            joined_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+            notified_ds BOOLEAN DEFAULT 0, 
+            FOREIGN KEY(conference_id) REFERENCES conference(conference_id) ON DELETE CASCADE,
+            FOREIGN KEY(pin) REFERENCES users(pin) ON DELETE SET NULL
+        )`); // Added ON DELETE CASCADE/SET NULL
+
+        // Create indexes
+        await db.exec('CREATE INDEX IF NOT EXISTS idx_live_calls_conference_id ON live_calls (conference_id)');
+        await db.exec('CREATE INDEX IF NOT EXISTS idx_live_calls_notified_ds ON live_calls (notified_ds)');
+
+        await db.exec('COMMIT');
+        console.log('Database schema verified/created successfully.');
+
+    } catch (err) {
+        console.error('Error initializing database:', err.message);
+        if (db) {
+            try {
+                await db.exec('ROLLBACK');
+            } catch (rollbackErr) {
+                console.error('Error rolling back transaction:', rollbackErr.message);
             }
-        );
-    });
+        }
+        throw err;
+    }
 };
 
-export const getConference = (conference_id) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM conference WHERE conference_id = ?', [conference_id], (err, row) => {
-            if (err) return reject(err);
-            resolve(row);
-        });
-    });
+
+// --- Conference Functions ---
+export const getConference = async (conference_id) => {
+    if (!db) throw new Error("Database not initialized");
+    return db.get('SELECT *, ds_pstn_notified FROM conference WHERE conference_id = ?', [conference_id]);
 };
 
-export const getConferenceByDigitalSambaRoomId = (digitalsamba_room_id) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM conference WHERE digitalsamba_room_id = ?', [digitalsamba_room_id], (err, row) => {
-            if (err) return reject(err);
-            resolve(row);
-        });
-    });
+export const markConferenceDsNotified = async (conferenceId) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = 'UPDATE conference SET ds_pstn_notified = true WHERE conference_id = ?';
+    const result = await db.run(query, [conferenceId]);
+    return { changes: result.changes };
 };
 
-export const updateConferenceDigitalSambaRoomId = (conference_id, digitalsamba_room_id) => {
-    return new Promise((resolve, reject) => {
-        db.run(
-            'UPDATE conference SET digitalsamba_room_id = ? WHERE conference_id = ?',
-            [digitalsamba_room_id, conference_id],
-            function(err) {
-                if (err) return reject(err);
-                resolve({ changes: this.changes });
-            }
-        );
-    });
+
+// --- User Functions ---
+export const getUserByPin = async (pin) => {
+    if (!db) throw new Error("Database not initialized");
+    return db.get('SELECT * FROM users WHERE pin = ?', [pin]);
 };
 
-// User operations
-export const getUserByPin = (pin) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE pin = ?', [pin], (err, row) => {
-            if (err) return reject(err);
-            resolve(row);
-        });
-    });
+
+// --- Live Call Functions ---
+export const addLiveCall = async ({ conference_id, call_id, pin, is_sip, cli }) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = 'INSERT INTO live_calls (conference_id, call_id, pin, is_sip, cli) VALUES (?, ?, ?, ?, ?)';
+    const result = await db.run(query, [conference_id, call_id, pin, is_sip, cli]);
+    return { id: result.lastID };
 };
 
-export const createUser = (userData) => {
-    return new Promise((resolve, reject) => {
-        const { conference_id, pin, display_name = null, external_id = null } = userData;
-        
-        db.run(
-            'INSERT INTO users (conference_id, pin, display_name, external_id) VALUES (?, ?, ?, ?)',
-            [conference_id, pin, display_name, external_id],
-            function(err) {
-                if (err) return reject(err);
-                resolve({ id: this.lastID, pin, display_name, external_id });
-            }
-        );
-    });
+export const getLiveCallWithUserInfo = async (callId) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = `
+        SELECT lc.*, u.display_name, u.external_id 
+        FROM live_calls lc
+        LEFT JOIN users u ON lc.pin = u.pin
+        WHERE lc.call_id = ?;
+    `;
+    return db.get(query, [callId]);
 };
 
-export const getAllUsers = () => {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM users', (err, rows) => {
-            if (err) return reject(err);
-            resolve(rows);
-        });
-    });
+export const removeLiveCall = async (callId) => {
+    if (!db) throw new Error("Database not initialized");
+    const result = await db.run('DELETE FROM live_calls WHERE call_id = ?', [callId]);
+    return { changes: result.changes };
 };
 
-export const getUsersByConferenceId = (conference_id) => {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM users WHERE conference_id = ?', [conference_id], (err, rows) => {
-            if (err) return reject(err);
-            resolve(rows);
-        });
-    });
+export const getPendingPstnParticipants = async (conferenceId) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = `
+        SELECT lc.call_id, lc.cli, u.display_name, u.external_id 
+        FROM live_calls lc
+        JOIN users u ON lc.pin = u.pin
+        WHERE lc.conference_id = ? AND lc.is_sip = 0 AND lc.notified_ds = 0;
+    `;
+    const rows = await db.all(query, [conferenceId]);
+    return rows.map(row => ({ call_id: row.call_id, caller_number: row.cli, name: row.display_name, external_id: row.external_id }));
 };
 
-export const updateUserDisplayName = (pin, display_name) => {
-    return new Promise((resolve, reject) => {
-        db.run(
-            'UPDATE users SET display_name = ? WHERE pin = ?',
-            [display_name, pin],
-            function(err) {
-                if (err) return reject(err);
-                resolve({ changes: this.changes });
-            }
-        );
-    });
+export const markParticipantsAsNotified = async (callIds) => {
+    if (!db) throw new Error("Database not initialized");
+    if (!callIds || callIds.length === 0) return { changes: 0 };
+    const placeholders = callIds.map(() => '?').join(',');
+    const query = `UPDATE live_calls SET notified_ds = true WHERE call_id IN (${placeholders})`;
+    const result = await db.run(query, callIds);
+    return { changes: result.changes };
 };
 
-export const updateUserExternalId = (pin, external_id) => {
-    return new Promise((resolve, reject) => {
-        db.run(
-            'UPDATE users SET external_id = ? WHERE pin = ?',
-            [external_id, pin],
-            function(err) {
-                if (err) return reject(err);
-                resolve({ changes: this.changes });
-            }
-        );
-    });
+/**
+ * Retrieves all active PSTN (non-SIP) calls for a specific conference, including user details.
+ * Used to inform Digital Samba when a SIP user joins/leaves.
+ * @param {string} conferenceId - The ID of the conference.
+ * @returns {Promise<Array<object>>} A promise that resolves to an array of active PSTN participant objects.
+ */
+export const getActivePstnCallsByConference = async (conferenceId) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = `
+        SELECT lc.call_id, lc.cli, u.display_name, u.external_id, lc.pin
+        FROM live_calls lc
+        LEFT JOIN users u ON lc.pin = u.pin
+        WHERE lc.conference_id = ? AND lc.is_sip = 0;
+    `;
+    return db.all(query, [conferenceId]);
 };
 
-// Live calls operations
-export const addLiveCall = (callData) => {
-    return new Promise((resolve, reject) => {
-        const { 
-            conference_id, 
-            call_id, 
-            pin = null,
-            is_sip = false,
-            cli = null
-        } = callData;
-        
-        // Use ISO string format for timestamps to ensure consistency
-        const now = new Date().toISOString();
-        
-        db.run(
-            'INSERT INTO live_calls (conference_id, call_id, pin, is_sip, start_time, cli) VALUES (?, ?, ?, ?, ?, ?)',
-            [conference_id, call_id, pin, is_sip ? 1 : 0, now, cli],
-            function(err) {
-                if (err) return reject(err);
-                resolve({ 
-                    id: this.lastID, 
-                    conference_id, 
-                    call_id, 
-                    pin,
-                    is_sip,
-                    start_time: now,
-                    cli
-                });
-            }
-        );
-    });
+/**
+ * Checks if a designated SIP user (is_sip = 1) is currently active in the specified conference.
+ * Used to determine if notifications for PSTN users should be sent to Digital Samba.
+ * @param {string} conferenceId - The ID of the conference.
+ * @returns {Promise<boolean>} A promise that resolves to true if a SIP user is active, false otherwise.
+ */
+export const isSipUserActiveInConference = async (conferenceId) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = `SELECT 1 FROM live_calls WHERE conference_id = ? AND is_sip = 1 LIMIT 1`;
+    const result = await db.get(query, [conferenceId]);
+    return !!result; // Return true if a row is found, false otherwise
 };
 
-export const getLiveCall = (call_id) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM live_calls WHERE call_id = ?', [call_id], (err, row) => {
-            if (err) return reject(err);
-            resolve(row);
-        });
-    });
+
+// --- Functions for server.js API Routes ---
+export const addConference = async ({ conference_id, digitalsamba_room_id }) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = 'INSERT INTO conference (conference_id, digitalsamba_room_id) VALUES (?, ?)';
+    const result = await db.run(query, [conference_id, digitalsamba_room_id]);
+    return { id: result.lastID };
 };
 
-export const getLiveCallWithUserInfo = (call_id) => {
-    return new Promise((resolve, reject) => {
-        db.get(
-            `SELECT lc.*, u.display_name, u.external_id
-             FROM live_calls lc 
-             LEFT JOIN users u ON lc.pin = u.pin 
-             WHERE lc.call_id = ?`, 
-            [call_id], 
-            (err, row) => {
-                if (err) return reject(err);
-                resolve(row);
-            }
-        );
-    });
+export const getAllConferences = async () => {
+    if (!db) throw new Error("Database not initialized");
+    return db.all('SELECT * FROM conference');
 };
 
-export const getLiveCallsByConference = (conference_id) => {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM live_calls WHERE conference_id = ?', [conference_id], (err, rows) => {
-            if (err) return reject(err);
-            resolve(rows);
-        });
-    });
+export const deleteConference = async (conference_id) => {
+    if (!db) throw new Error("Database not initialized");
+    // Assumes ON DELETE CASCADE is set for users and live_calls tables
+    const result = await db.run('DELETE FROM conference WHERE conference_id = ?', [conference_id]);
+    return { changes: result.changes };
 };
 
-export const getLiveCallsByConferenceWithUserInfo = (conference_id) => {
-    return new Promise((resolve, reject) => {
-        db.all(
-            `SELECT lc.*, u.display_name, u.external_id
-             FROM live_calls lc 
-             LEFT JOIN users u ON lc.pin = u.pin 
-             WHERE lc.conference_id = ?`, 
-            [conference_id], 
-            (err, rows) => {
-                if (err) return reject(err);
-                resolve(rows);
-            }
-        );
-    });
+export const addUser = async ({ conference_id, pin, display_name, external_id }) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = 'INSERT INTO users (conference_id, pin, display_name, external_id) VALUES (?, ?, ?, ?)';
+    const result = await db.run(query, [conference_id, pin, display_name, external_id]);
+    return { id: result.lastID };
 };
 
-export const countLiveCallsByConference = (conference_id) => {
-    return new Promise((resolve, reject) => {
-        db.get('SELECT COUNT(*) as count FROM live_calls WHERE conference_id = ?', [conference_id], (err, row) => {
-            if (err) return reject(err);
-            resolve(row ? row.count : 0);
-        });
-    });
+export const getAllUsers = async () => {
+    if (!db) throw new Error("Database not initialized");
+    return db.all('SELECT * FROM users');
 };
 
-export const removeLiveCall = (call_id) => {
-    return new Promise((resolve, reject) => {
-        db.run('DELETE FROM live_calls WHERE call_id = ?', [call_id], function(err) {
-            if (err) return reject(err);
-            resolve({ deleted: this.changes > 0 });
-        });
-    });
+export const getUsersByConference = async (conference_id) => {
+    if (!db) throw new Error("Database not initialized");
+    return db.all('SELECT * FROM users WHERE conference_id = ?', [conference_id]);
 };
 
-export default db;
+export const deleteUserByPin = async (pin) => {
+    if (!db) throw new Error("Database not initialized");
+    const result = await db.run('DELETE FROM users WHERE pin = ?', [pin]);
+    return { changes: result.changes };
+};
+
+export const updateUserExternalId = async (pin, external_id) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = 'UPDATE users SET external_id = ? WHERE pin = ?';
+    const result = await db.run(query, [external_id, pin]);
+    return { changes: result.changes };
+};
+
+export const getAllConferencesWithUsers = async () => {
+    if (!db) throw new Error("Database not initialized");
+    const conferences = await db.all('SELECT * FROM conference');
+    const results = await Promise.all(conferences.map(async (conference) => {
+        const users = await db.all('SELECT * FROM users WHERE conference_id = ?', [conference.conference_id]);
+        return { ...conference, users: users };
+    }));
+    return results;
+};
+
+export const getAllLiveCallsWithUserInfo = async () => {
+    if (!db) throw new Error("Database not initialized");
+    const query = `
+        SELECT lc.*, u.display_name, u.external_id 
+        FROM live_calls lc LEFT JOIN users u ON lc.pin = u.pin 
+        ORDER BY lc.conference_id, lc.joined_at DESC`;
+    return db.all(query);
+};
+
+export const getLiveCallsByConferenceWithUserInfo = async (conference_id) => {
+    if (!db) throw new Error("Database not initialized");
+    const query = `
+        SELECT lc.*, u.display_name, u.external_id 
+        FROM live_calls lc LEFT JOIN users u ON lc.pin = u.pin 
+        WHERE lc.conference_id = ? ORDER BY lc.joined_at DESC`;
+    return db.all(query, [conference_id]);
+};
+
+export const getLiveCall = async (callId) => {
+    if (!db) throw new Error("Database not initialized");
+    return db.get('SELECT * FROM live_calls WHERE call_id = ?', [callId]);
+};
