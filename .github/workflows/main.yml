@@ -62,8 +62,10 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            # Define deployment path using secret or default
-            DEPLOY_PATH=${{ secrets.DEPLOYMENT_PATH:-/opt/deployment/sinch-ds-dev }}
+            # Define deployment path using secret
+            DEPLOY_PATH="${{ secrets.DEPLOYMENT_PATH }}"
+            # Set default value if secret is empty
+            DEPLOY_PATH=${DEPLOY_PATH:-/opt/deployment/sinch-ds-dev}
 
             # Ensure the deployment directory exists
             echo "Ensuring deployment directory exists: $DEPLOY_PATH"
