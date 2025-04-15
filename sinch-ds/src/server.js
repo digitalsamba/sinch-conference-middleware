@@ -95,11 +95,11 @@ app.delete('/api/conference/:conference_id', (req, res) => {
 
 // API routes for users
 app.post('/api/user', (req, res) => {
-  const { conference_id, pin, display_name } = req.body;
+  const { conference_id, pin, display_name, external_id } = req.body;
   
   db.run(
-    'INSERT INTO users (conference_id, pin, display_name) VALUES (?, ?, ?)',
-    [conference_id, pin, display_name],
+    'INSERT INTO users (conference_id, pin, display_name, external_id) VALUES (?, ?, ?, ?)',
+    [conference_id, pin, display_name, external_id],
     function(err) {
       if (err) {
         console.error('Error creating user:', err);
@@ -109,7 +109,8 @@ app.post('/api/user', (req, res) => {
         id: this.lastID, 
         conference_id, 
         pin, 
-        display_name 
+        display_name,
+        external_id
       });
     }
   );
@@ -147,6 +148,33 @@ app.delete('/api/user', (req, res) => {
     }
     res.json({ message: 'User deleted successfully' });
   });
+});
+
+// Add new endpoint to update user external_id
+app.patch('/api/user/:pin/external-id', (req, res) => {
+  const { pin } = req.params;
+  const { external_id } = req.body;
+  
+  db.run(
+    'UPDATE users SET external_id = ? WHERE pin = ?',
+    [external_id, pin],
+    function(err) {
+      if (err) {
+        console.error('Error updating user external_id:', err);
+        return res.status(500).json({ error: 'Failed to update user external_id' });
+      }
+      
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      res.json({ 
+        message: 'User external_id updated successfully',
+        pin,
+        external_id
+      });
+    }
+  );
 });
 
 // Special endpoint to get conferences with their associated users
@@ -187,11 +215,11 @@ app.get('/api/conferences-and-users', (req, res) => {
   });
 });
 
-// Get all live calls with user information
+// Get all live calls with user information - include external_id in the query
 app.get('/api/live-calls', (req, res) => {
     db.all(
         `SELECT lc.id, lc.conference_id, lc.call_id, lc.start_time, lc.is_sip, lc.cli,
-                u.display_name
+                u.display_name, u.external_id
          FROM live_calls lc 
          LEFT JOIN users u ON lc.pin = u.pin 
          ORDER BY lc.conference_id, lc.start_time DESC`,
@@ -205,13 +233,13 @@ app.get('/api/live-calls', (req, res) => {
     );
 });
 
-// Get live calls for a specific conference
+// Get live calls for a specific conference - include external_id in the query
 app.get('/api/live-calls/:conference_id', (req, res) => {
     const conference_id = req.params.conference_id;
     
     db.all(
         `SELECT lc.id, lc.conference_id, lc.call_id, lc.start_time, lc.is_sip, lc.cli,
-                u.display_name
+                u.display_name, u.external_id
          FROM live_calls lc 
          LEFT JOIN users u ON lc.pin = u.pin 
          WHERE lc.conference_id = ?

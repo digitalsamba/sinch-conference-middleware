@@ -1,5 +1,6 @@
 import { Voice } from '@sinch/sdk-core';
-import db, { getUserByPin, addLiveCall, getLiveCallWithUserInfo } from '../database.js';
+import db, { getUserByPin, addLiveCall, getLiveCallWithUserInfo, getConference } from '../database.js';
+import digitalSambaService from '../services/digitalSambaService.js';
 
 /**
  * Handles an Incoming Call Event (ICE).
@@ -91,6 +92,43 @@ export const handlePinInput = async (pieRequest) => {
         });
         
         console.log(`Call ${callId} added to live_calls table with CLI ${cli}`);
+        
+        // Check if this conference has a Digital Samba room ID
+        const conference = await getConference(conferenceId);
+        
+        // If the conference has a Digital Samba room ID, notify Digital Samba about the participant joining
+        if (conference && conference.digitalsamba_room_id) {
+          try {
+            // Format the participant data for Digital Samba
+            const participantData = {
+              id: callId,
+              name: user.display_name || `Phone User (${cli || 'Unknown'})`,
+              phoneNumber: cli || 'Unknown'
+            };
+            
+            // Add external_id if it exists
+            if (user.external_id) {
+              participantData.externalId = user.external_id;
+              console.log(`Including external_id ${user.external_id} for participant`);
+            }
+            
+            console.log(`Notifying Digital Samba about participant joining room ${conference.digitalsamba_room_id}:`, participantData);
+            
+            const notificationResult = await digitalSambaService.notifyPhoneParticipantJoined(
+              conference.digitalsamba_room_id, 
+              participantData
+            );
+            
+            if (notificationResult.success) {
+              console.log('Successfully notified Digital Samba of participant joining');
+            } else {
+              console.error('Failed to notify Digital Samba:', notificationResult.error);
+            }
+          } catch (dsError) {
+            console.error('Error notifying Digital Samba about participant joining:', dsError);
+            // Continue with the call even if there's a notification error
+          }
+        }
       } catch (dbError) {
         console.error('Error adding call to live_calls table:', dbError);
         // Continue with the call even if there's a database error
@@ -157,10 +195,44 @@ export const handleDisconnectedCallEvent = (diceRequest) => {
     // Using an IIFE to handle the async operation
     (async () => {
       try {
-        // Import the database function directly here to avoid circular dependencies
-        const { removeLiveCall } = await import('../database.js');
-        const result = await removeLiveCall(callId);
-        console.log(`Call removed from live_calls table:`, result);
+        // Get call information before removing it
+        const { getLiveCallWithUserInfo, getConference, removeLiveCall } = await import('../database.js');
+        
+        // Get call details including the conference ID
+        const callDetails = await getLiveCallWithUserInfo(callId);
+        
+        if (callDetails) {
+          // Remove the call from our database
+          const result = await removeLiveCall(callId);
+          console.log(`Call removed from live_calls table:`, result);
+          
+          // Check if this conference has a Digital Samba room ID
+          const conference = await getConference(callDetails.conference_id);
+          
+          // If the conference has a Digital Samba room ID, notify Digital Samba about the participant leaving
+          if (conference && conference.digitalsamba_room_id) {
+            try {
+              // Import the Digital Samba service
+              const { default: dsService } = await import('../services/digitalSambaService.js');
+              
+              console.log(`Notifying Digital Samba about participant leaving room ${conference.digitalsamba_room_id} with call ID: ${callId}`);
+              
+              // Call the updated service with just the call ID
+              const notificationResult = await dsService.notifyPhoneParticipantLeft(
+                conference.digitalsamba_room_id, 
+                callId
+              );
+              
+              if (notificationResult.success) {
+                console.log('Successfully notified Digital Samba of participant leaving');
+              } else {
+                console.error('Failed to notify Digital Samba:', notificationResult.error);
+              }
+            } catch (dsError) {
+              console.error('Error notifying Digital Samba about participant leaving:', dsError);
+            }
+          }
+        }
 
         // Clean up our call info store
         if (global.callInfo && global.callInfo[callId]) {
@@ -168,7 +240,7 @@ export const handleDisconnectedCallEvent = (diceRequest) => {
           console.log(`Removed call info for call ID ${callId}`);
         }
       } catch (err) {
-        console.error('Error removing call from live_calls table:', err);
+        console.error('Error processing disconnected call:', err);
       }
     })();
   } catch (error) {
