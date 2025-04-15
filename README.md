@@ -7,7 +7,7 @@ This project provides a middleware service to manage Sinch voice conferences and
 *   **Conference Management:** Create, list, and delete conferences.
 *   **Phone User Management:** Add users (with PINs, display names, external IDs) to conferences, list users, remove users.
 *   **Sinch Voice Callback Handling:** Processes ICE, ACE, and DICE events from Sinch via a webhook.
-*   **Digital Samba Room Callback Handling:** Processes phone_participant_muted & phone_participant_unmuted events sent from Digital Samba via a webhook. 
+*   **Digital Samba Callback Handling:** Processes phone_participant_muted & phone_participant_unmuted events sent from Digital Samba via a webhook. 
 *   **Digital Samba Integration** Associate Sinch conferences with Digital Samba room IDs for Sinch conference participation and management from a Digital Samba room.
 *   **Live Call Management:** View active calls per conference, mute and unmute participants via the UI. 
 *   **Database Persistence:** Stores conference and user data in SQLite.
