@@ -84,26 +84,19 @@ jobs:
             sudo docker run -d --rm \
                             --name sinch-ds-dev \
                             --network deployment_proxy \
-                            # Map HTTP port
                             -p ${{ secrets.PORT || 3030 }}:${{ secrets.PORT || 3030 }} \
-                            # Map WebSocket port
                             -p ${{ secrets.WS_PORT || 3031 }}:${{ secrets.WS_PORT || 3031 }} \
                             -e VIRTUAL_HOST=${{ secrets.DEV_HOST }} \
                             -e LETSENCRYPT_HOST=${{ secrets.DEV_HOST }} \
-                            # nginx-proxy target port
                             -e VIRTUAL_PORT=${{ secrets.PORT || 3030 }} \
-                            # Pass PORT env var to container
                             -e PORT=${{ secrets.PORT || 3030 }} \
-                            # Pass WS_PORT env var to container
                             -e WS_PORT=${{ secrets.WS_PORT || 3031 }} \
                             -e SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }} \
                             -e SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }} \
                             -e DIGITAL_SAMBA_TEAM_ID=${{ secrets.DIGITAL_SAMBA_TEAM_ID }} \
                             -e DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }} \
                             -e DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }} \
-                            # Use container path for DB
                             -e DATABASE_PATH=/app/conference_data.db \
-                            # Mount DB volume using variable
                             -v $DEPLOY_PATH/conference_data.db:/app/conference_data.db \
                             digitalsamba376/sinch-ds:latest
             echo "Deployment script finished."
