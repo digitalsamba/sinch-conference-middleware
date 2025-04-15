@@ -1,15 +1,15 @@
 # Sinch Conference Middleware
 
-This project provides a middleware service to manage Sinch voice conferences and integrate them with Digital Samba rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), and provides a simple web UI for interaction.
+This project provides a middleware service to manage Sinch voice conferences and integrate them with Digital Samba rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), notifies Digital Samba when a phone user has joined or left a Digital Samba room, handles phone_user_muted and phone_user_unmuted events from DigitalSamba and provides a simple web UI for interaction and demoing the incorporated functionality.
 
 ## Features
 
 *   **Conference Management:** Create, list, and delete conferences.
 *   **Phone User Management:** Add users (with PINs, display names, external IDs) to conferences, list users, remove users.
-*   **Sinch Voice Callback Handling:** Processes ICE, ACE, and DICE events from Sinch.
-*   **Digital Samba Room Callback Handling:** Processes phone_participant_muted & phone_participant_unmuted events sent Digital Samba via webhooks. 
-*   **Digital Samba Integration** Associate Sinch conferences with Digital Samba room IDs for Sinch conference management from a Digital Samba room.
-*   **Live Call Management:** View active calls per conference, mute, unmute, and kick participants via the UI.
+*   **Sinch Voice Callback Handling:** Processes ICE, ACE, and DICE events from Sinch via a webhook.
+*   **Digital Samba Callback Handling:** Processes phone_participant_muted & phone_participant_unmuted events sent from Digital Samba via a webhook. 
+*   **Digital Samba Integration** Associate Sinch conferences with Digital Samba room IDs for Sinch conference participation and management from a Digital Samba room.
+*   **Live Call Management:** View active calls per conference, mute and unmute participants via the UI. 
 *   **Database Persistence:** Stores conference and user data in SQLite.
 *   **Web UI:** Simple frontend for managing conferences, users, and viewing active calls.
 *   **Real-time server log streaming via WebSockets to the frontend UI.**
@@ -103,7 +103,6 @@ A `Dockerfile` is provided in the `sinch-ds` directory for building a container 
     docker run -p 3030:3030 --env-file .env -v "${PWD}\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     ```
     *   `-p 3030:3030`: Maps the host port 3030 to the container's HTTP/WebSocket port.
-    # *   `-p 3031:3031`: Removed
     *   `--env-file .env`: Loads environment variables from your local `.env` file.
     *   `-v .../conference_data.db:/app/conference_data.db`: Mounts the local database file into the container for persistence. Create an empty `conference_data.db` file first if it doesn't exist (`touch conference_data.db` or `type nul > conference_data.db` on Windows).
     *   `--name sinch-middleware`: Assigns a name to the container.
@@ -126,9 +125,9 @@ This repository uses GitHub Actions for continuous integration and deployment. T
 *   `SINCH_APPLICATION_SECRET`
 *   `PORT` (optional, defaults to 3030 in the action)
 *   `DATABASE_PATH` (optional, defaults to `./conference_data.db` in the action)
-*   `DIGITAL_SAMBA_API_KEY` (optional)
-*   `DIGITAL_SAMBA_API_SECRET` (optional)
-*   `DIGITAL_SAMBA_API_URL` (optional)
+*   `DIGITAL_SAMBA_API_KEY` 
+*   `DIGITAL_SAMBA_API_SECRET`
+*   `DIGITAL_SAMBA_API_URL`
 *   `DEPLOYMENT_PATH` (optional, defaults to `/opt/deployment/sinch-ds-dev` in the action)
 *   `SERVER_HOST`
 *   `SERVER_USER`
