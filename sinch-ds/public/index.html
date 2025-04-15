@@ -427,14 +427,12 @@
                                 // Silent error handling - just use default duration
                             }
                         }
+                          conferenceHTML += `<p>Duration: ${duration}</p>`;
                         
-                        conferenceHTML += `<p>Duration: ${duration}</p>`;
-                        
-                        // Add action buttons
+                        // Add action buttons (kick removed)
                         conferenceHTML += `<div class="call-actions">`;
                         conferenceHTML += `<button class="mute-btn" data-call-id="${call.call_id}">Mute</button>`;
                         conferenceHTML += `<button class="unmute-btn" data-call-id="${call.call_id}">Unmute</button>`;
-                        conferenceHTML += `<button class="kick-btn" data-call-id="${call.call_id}">Kick</button>`;
                         conferenceHTML += `</div>`;
                         
                         conferenceHTML += `</div>`;
@@ -483,33 +481,11 @@
                             }
                         } catch (error) {
                             console.error('Error unmuting call:', error);
-                            showNotification('Error unmuting call');
-                        }
+                            showNotification('Error unmuting call');                        }
                     });
                 });
                 
-                document.querySelectorAll('.kick-btn').forEach(button => {
-                    button.addEventListener('click', async (event) => {
-                        const callId = event.target.dataset.callId;
-                        if (confirm('Are you sure you want to kick this caller?')) {
-                            try {
-                                const response = await fetch(`/api/call/${callId}/kick`, {
-                                    method: 'POST'
-                                });
-                                
-                                if (response.ok) {
-                                    showNotification('Caller kicked successfully');
-                                    loadActiveCalls(); // Refresh the list
-                                } else {
-                                    showNotification('Failed to kick caller');
-                                }
-                            } catch (error) {
-                                console.error('Error kicking caller:', error);
-                                showNotification('Error kicking caller');
-                            }
-                        }
-                    });
-                });
+                // Note: Kick button event listener removed as per requirement
                 
             } catch (error) {
                 console.error('Error loading active calls:', error);
