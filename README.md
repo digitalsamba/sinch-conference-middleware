@@ -32,8 +32,8 @@ SINCH_APPLICATION_KEY=YOUR_SINCH_APP_KEY
 SINCH_APPLICATION_SECRET=YOUR_SINCH_APP_SECRET
 
 # Server Configuration
-PORT=3030 # Optional: Port for the HTTP server (defaults to 3030)
-WS_PORT=3031 # Optional: Port for the WebSocket log server (defaults to 3031)
+PORT=3030 # Optional: Port for the HTTP/WebSocket server (defaults to 3030)
+# WS_PORT=3031 # Removed: WebSocket now runs on the same port as HTTP
 
 # Database Configuration
 DATABASE_PATH=./conference_data.db # Optional: Path to the SQLite database file
@@ -60,7 +60,7 @@ DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API end
     ```bash
     npm start
     ```
-    The server will start on `http://localhost:3030` (or the `PORT` specified in `.env`). The WebSocket server for logs will start on port 3031 (or the `WS_PORT` specified).
+    The server will start on `http://localhost:3030` (or the `PORT` specified in `.env`). The WebSocket server for logs now runs on the same port.
 5.  **Access the UI:** Open your browser and navigate to `http://localhost:3030`.
 
 ## API Endpoints
@@ -93,14 +93,14 @@ A `Dockerfile` is provided in the `sinch-ds` directory for building a container 
     *Make sure you have a `.env` file in the `sinch-ds` directory.*
     ```bash
     # For Linux/macOS:
-    docker run -p 3030:3030 -p 3031:3031 --env-file .env -v "$(pwd)/conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
+    docker run -p 3030:3030 --env-file .env -v "$(pwd)/conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     # For Windows (Command Prompt):
-    docker run -p 3030:3030 -p 3031:3031 --env-file .env -v "%cd%\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
+    docker run -p 3030:3030 --env-file .env -v "%cd%\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     # For Windows (PowerShell):
-    docker run -p 3030:3030 -p 3031:3031 --env-file .env -v "${PWD}\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
+    docker run -p 3030:3030 --env-file .env -v "${PWD}\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     ```
-    *   `-p 3030:3030`: Maps the host port 3030 to the container's HTTP port.
-    *   `-p 3031:3031`: Maps the host port 3031 to the container's WebSocket port.
+    *   `-p 3030:3030`: Maps the host port 3030 to the container's HTTP/WebSocket port.
+    # *   `-p 3031:3031`: Removed
     *   `--env-file .env`: Loads environment variables from your local `.env` file.
     *   `-v .../conference_data.db:/app/conference_data.db`: Mounts the local database file into the container for persistence. Create an empty `conference_data.db` file first if it doesn't exist (`touch conference_data.db` or `type nul > conference_data.db` on Windows).
     *   `--name sinch-middleware`: Assigns a name to the container.
@@ -122,11 +122,17 @@ This repository uses GitHub Actions for continuous integration and deployment. T
 *   `SINCH_APPLICATION_KEY`
 *   `SINCH_APPLICATION_SECRET`
 *   `PORT` (optional, defaults to 3030 in the action)
-*   `WS_PORT` (optional, defaults to 3031 in the action)
 *   `DATABASE_PATH` (optional, defaults to `./conference_data.db` in the action)
 *   `DIGITAL_SAMBA_API_KEY` (optional)
 *   `DIGITAL_SAMBA_API_SECRET` (optional)
 *   `DIGITAL_SAMBA_API_URL` (optional)
+*   `DEPLOYMENT_PATH` (optional, defaults to `/opt/deployment/sinch-ds-dev` in the action)
+*   `SERVER_HOST`
+*   `SERVER_USER`
+*   `SERVER_SSH_KEY`
+*   `DEV_HOST`
+*   `DOCKER_HUB_USERNAME`
+*   `DOCKER_HUB_TOKEN`
 
 ## Contributing
 
