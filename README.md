@@ -1,14 +1,15 @@
 # Sinch Conference Middleware
 
-This project provides a middleware service to manage Sinch voice conferences, integrating with Digital Samba for enhanced features. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), and provides a simple web UI for interaction.
+This project provides a middleware service to manage Sinch voice conferences and integrate them with Digital Samba rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), and provides a simple web UI for interaction.
 
 ## Features
 
 *   **Conference Management:** Create, list, and delete conferences.
-*   **User Management:** Add users (with PINs, display names, external IDs) to conferences, list users, remove users.
-*   **Sinch Callback Handling:** Processes ICE, ACE, and DICE events from Sinch.
+*   **Phone User Management:** Add users (with PINs, display names, external IDs) to conferences, list users, remove users.
+*   **Sinch Voice Callback Handling:** Processes ICE, ACE, and DICE events from Sinch.
+*   **Digital Samba Room Callback Handling:** Processes phone_participant_muted & phone_participant_unmuted events sent Digital Samba via webhooks. 
+*   **Digital Samba Integration** Associate Sinch conferences with Digital Samba room IDs for Sinch conference management from a Digital Samba room.
 *   **Live Call Management:** View active calls per conference, mute, unmute, and kick participants via the UI.
-*   **Digital Samba Integration (Optional):** Associates Sinch conferences with Digital Samba room IDs.
 *   **Database Persistence:** Stores conference and user data in SQLite.
 *   **Web UI:** Simple frontend for managing conferences, users, and viewing active calls.
 *   **Real-time server log streaming via WebSockets to the frontend UI.**
@@ -33,15 +34,15 @@ SINCH_APPLICATION_SECRET=YOUR_SINCH_APP_SECRET
 
 # Server Configuration
 PORT=3030 # Optional: Port for the HTTP/WebSocket server (defaults to 3030)
-# WS_PORT=3031 # Removed: WebSocket now runs on the same port as HTTP
-
-# Database Configuration
-DATABASE_PATH=./conference_data.db # Optional: Path to the SQLite database file
 
 # Digital Samba Configuration (Optional)
 DIGITAL_SAMBA_API_KEY=YOUR_DS_API_KEY
 DIGITAL_SAMBA_API_SECRET=YOUR_DS_API_SECRET
 DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API endpoint
+DIGITAL_SAMBA_WEBHOOK_SECRET=DigitalSambaListener # Secret for authenticating Digital Samba webhook calls
+
+# Database Configuration
+DATABASE_PATH=./conference_data.db: Path to the SQLite database file
 ```
 
 ## Setup and Running
@@ -78,7 +79,9 @@ DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API end
 *   `/api/call/:call_id/mute` (POST): Mute a participant in a conference.
 *   `/api/call/:call_id/unmute` (POST): Unmute a participant in a conference.
 *   `/api/call/:call_id/kick` (POST): Kick a participant from a conference.
+
 *   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, ACE, DICE).
+*   `/DigitalSambaListener` (POST): Webhook endpoint for Digital Samba events (mute/unmute). Requires `Authorization: Bearer <DIGITAL_SAMBA_WEBHOOK_SECRET>` header.
 
 ## Docker Support
 

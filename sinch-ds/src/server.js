@@ -27,6 +27,28 @@ import sinchService from './services/sinchService.js';
 
 dotenv.config();
 
+// --- Environment Variables ---
+const DIGITAL_SAMBA_WEBHOOK_SECRET = process.env.DIGITAL_SAMBA_WEBHOOK_SECRET || 'DigitalSambaListener';
+
+// --- Middleware for Digital Samba Webhook Authentication ---
+const verifyDigitalSambaAuth = (req, res, next) => {
+    const expectedAuthHeader = `Bearer ${DIGITAL_SAMBA_WEBHOOK_SECRET}`;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+        console.warn('Digital Samba webhook received without Authorization header');
+        return res.status(401).json({ error: 'Authorization header is required' });
+    }
+
+    if (authHeader !== expectedAuthHeader) {
+        console.warn('Digital Samba webhook received with invalid Authorization header');
+        return res.status(403).json({ error: 'Invalid Authorization header' });
+    }
+
+    console.info('Digital Samba webhook authenticated successfully');
+    next();
+};
+
 import { voiceController } from './voice/controller.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -133,12 +155,77 @@ initializeDatabase().then(() => {
     });
 
     // Serve static files AFTER body parsing middleware
-    app.use(express.static(path.join(__dirname, '../public')));
-
-    // Initialize the voice controller (ensure it uses named imports if needed)
+    app.use(express.static(path.join(__dirname, '../public')));    // Initialize the voice controller (ensure it uses named imports if needed)
     voiceController(app, {
         applicationKey: process.env.SINCH_APPLICATION_KEY,
         applicationSecret: process.env.SINCH_APPLICATION_SECRET
+    });    // --- Digital Samba Webhook Listener ---
+    app.post('/DigitalSambaListener', verifyDigitalSambaAuth, async (req, res) => {
+        console.info('Received Digital Samba event:', JSON.stringify(req.body, null, 2));
+        
+        try {
+            const event = req.body;
+            
+            // Handle events based on the actual Digital Samba event structure
+            if (event && event.eventType && event.callId) {
+                switch (event.eventType) {
+                    case 'phone_participant_muted':
+                        console.info(`Processing mute request for call ID: ${event.callId}`);
+                        const livecallMute = await getLiveCall(event.callId);
+                        
+                        if (!livecallMute) {
+                            console.warn(`Call ID ${event.callId} not found in live calls`);
+                            return res.status(404).json({ error: 'Call not found' });
+                        }
+                        
+                        const muteResult = await sinchService.muteParticipant(livecallMute.conference_id, event.callId);
+                        
+                        if (!muteResult.success) {
+                            console.error(`Failed to mute call ${event.callId}:`, muteResult.error);
+                            return res.status(muteResult.status || 500).json({
+                                error: 'Failed to mute participant',
+                                details: muteResult.error
+                            });
+                        }
+                        
+                        console.info(`Successfully muted call ${event.callId} in conference ${livecallMute.conference_id}`);
+                        break;
+                        
+                    case 'phone_participant_unmuted':
+                        console.info(`Processing unmute request for call ID: ${event.callId}`);
+                        const livecallUnmute = await getLiveCall(event.callId);
+                        
+                        if (!livecallUnmute) {
+                            console.warn(`Call ID ${event.callId} not found in live calls`);
+                            return res.status(404).json({ error: 'Call not found' });
+                        }
+                        
+                        const unmuteResult = await sinchService.unmuteParticipant(livecallUnmute.conference_id, event.callId);
+                        
+                        if (!unmuteResult.success) {
+                            console.error(`Failed to unmute call ${event.callId}:`, unmuteResult.error);
+                            return res.status(unmuteResult.status || 500).json({
+                                error: 'Failed to unmute participant',
+                                details: unmuteResult.error
+                            });
+                        }
+                        
+                        console.info(`Successfully unmuted call ${event.callId} in conference ${livecallUnmute.conference_id}`);
+                        break;
+                        
+                    default:
+                        console.info(`Received unhandled Digital Samba event type: ${event.eventType}`);
+                }
+            } else {
+                console.warn('Received malformed Digital Samba event:', event);
+            }
+            
+            // Acknowledge receipt of the event
+            res.status(200).json({ message: 'Event received and processed' });
+        } catch (error) {
+            console.error('Error processing Digital Samba event:', error);
+            res.status(500).json({ error: 'Internal server error', message: error.message });
+        }
     });
 
     // --- API Routes (Should now work with imported functions) ---
