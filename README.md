@@ -68,6 +68,9 @@ DATABASE_PATH=./conference_data.db: Path to the SQLite database file
 
 ## API Endpoints
 
+*   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, ACE, DICE).
+*   `/DigitalSambaListener` (POST): Endpoint for Digital Samba room events (phone_user_mute/phone_user_unmute). 
+
 *   `/api/conference` (POST): Create a new conference.
 *   `/api/conferences` (GET): List all conferences.
 *   `/api/conference/:conference_id` (DELETE): Delete a conference.
@@ -82,8 +85,7 @@ DATABASE_PATH=./conference_data.db: Path to the SQLite database file
 *   `/api/call/:call_id/unmute` (POST): Unmute a participant in a conference.
 *   `/api/call/:call_id/kick` (POST): Kick a participant from a conference.
 
-*   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, ACE, DICE).
-*   `/DigitalSambaListener` (POST): Webhook endpoint for Digital Samba events (mute/unmute). Requires `Authorization: Bearer <DIGITAL_SAMBA_WEBHOOK_SECRET>` header.
+
 
 ## Docker Support
 
