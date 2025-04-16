@@ -31,6 +31,7 @@ Create a `.env` file in the `sinch-ds` directory with the following variables:
 # Sinch API Credentials
 SINCH_APPLICATION_KEY=YOUR_SINCH_APP_KEY
 SINCH_APPLICATION_SECRET=YOUR_SINCH_APP_SECRET
+SINCH_REGION=europe # Optional: Region for Sinch API calls (defaults to 'europe', options: 'global', 'europe', 'northAmerica', 'southAmerica', 'asiaSouthEast1', 'asiaSouthEast2')
 
 # Server Configuration
 PORT=3030 # Optional: Port for the HTTP/WebSocket server (defaults to 3030)

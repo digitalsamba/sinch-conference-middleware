@@ -6,8 +6,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Base URL for Sinch API
-const SINCH_BASE_URL = 'https://calling.api.sinch.com';
+// Available Sinch API endpoints
+const SINCH_ENDPOINTS = {
+  global: 'https://calling.api.sinch.com',
+  europe: 'https://calling-euc1.api.sinch.com',
+  northAmerica: 'https://calling-use1.api.sinch.com',
+  southAmerica: 'https://calling-sae1.api.sinch.com',
+  asiaSouthEast1: 'https://calling-apse1.api.sinch.com',
+  asiaSouthEast2: 'https://calling-apse2.api.sinch.com'
+};
+
+// Get the base URL from environment variable or use Europe by default
+const SINCH_REGION = process.env.SINCH_REGION || 'europe';
+const SINCH_BASE_URL = SINCH_ENDPOINTS[SINCH_REGION] || SINCH_ENDPOINTS.europe;
 
 /**
  * Creates authorization header for Sinch API requests
