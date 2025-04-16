@@ -1,111 +1,104 @@
-# Sinch Conference Middleware Architecture
+# Digital Samba <> Sinch Conference Middleware Architecture
 
 This document describes the architecture and flow of the Sinch Conference Middleware application, which integrates Sinch Voice API with Digital Samba video conferencing.
 
-## System Flow Diagram
+# Digital Samba & PSTN Integration Application
 
+## Application Flow Diagram
+
+```mermaid
+flowchart TB
+    subgraph DigitalSambaSetup ["Digital Samba Room Setup"]
+        DS1[Create Digital Samba Room] --> DS2[Configure Room Settings]
+        DS2 --> DS3[Assign Telephone Number]
+        DS3 --> DS4[Configure DTMF Sequence/PIN]
+        DS4 --> DS5[Generate Room ID]
+        DS5 --> DS6[Map to PSTN Conference]
+    end
+    
+    subgraph ConferenceManagement ["Conference Management Flow"]
+        CM1[User accesses UI] -->|Create/Manage Conference| CM2[UI sends requests to server]
+        CM1 -->|API Endpoint| CM3[API request]
+        CM2 --> CM4[Express server processes requests]
+        CM3 --> CM4
+        CM4 --> CM5[Store data in SQLite database]
+        CM5 --> CM6{Action Required?}
+        CM6 -->|Yes| CM7[Communicate with\nSinch Voice API]
+        CM6 -->|No| CM8[Return response to user]
+        CM7 --> CM8
+    end
+
+    subgraph CallHandling ["Call Handling Flow"]
+        B1[Sinch Voice API sends webhook\nto /VoiceEvent endpoint] --> B2{Event Type?}
+        B2 -->|ICE| B3[Process Incoming Call Event]
+        B2 -->|PIE| B4[Process Prompt Input Event\nValidate PIN]
+        B2 -->|DICE| B5[Process Disconnected Call Event]
+        B3 --> B6[Update Call State in Database]
+        B4 --> B6
+        B5 --> B6
+        B6 --> B7[Update UI with Active Calls]
+    end
+
+    subgraph ParticipantFlow ["Participant Join/Leave Flow"]
+        C1[User enters PIN] --> C2{PIN Valid?}
+        C2 -->|No| C3[Reject Call]
+        C2 -->|Yes| C4[Add to live_calls table]
+        C4 --> C5{Linked to\nDigital Samba Room?}
+        C5 -->|No| C6[Connect to Conference Only]
+        C5 -->|Yes| C7{User Type?}
+        
+        C7 -->|SIP User| C8[Digital Samba Room Connection]
+        C7 -->|PSTN User| C9{SIP User Active?}
+        
+        C8 --> C10[Query all PSTN Participants]
+        C10 --> C11[Notify Digital Samba about\neach PSTN participant]
+        
+        C9 -->|Yes| C12[Notify Digital Samba\nabout phone user joining]
+        C9 -->|No| C13[No notification sent]
+    end
+
+    subgraph DisconnectFlow ["Disconnect Flow"]
+        D1[User Disconnects\nDICE Event] --> D2[Retrieve User Details]
+        D2 --> D3{User Type?}
+        D3 -->|SIP User| D4[Notify Digital Samba\nabout all PSTN users leaving]
+        D3 -->|PSTN User| D5{SIP still active?}
+        D5 -->|Yes| D6[Notify Digital Samba\nabout PSTN user leaving]
+        D5 -->|No| D7[No notification needed]
+        D4 --> D8[Remove from live_calls table]
+        D6 --> D8
+        D7 --> D8
+    end
+    
+    subgraph WebhookFlow ["Digital Samba Webhook Flow"]
+        E1[Digital Samba sends webhook\nto /DigitalSambaListener] --> E2[Authenticate using webhook secret]
+        E2 --> E3{Event Type?}
+        E3 -->|Mute/Unmute| E4[Trigger corresponding\nSinch API call]
+        E3 -->|Other Events| E5[Process accordingly]
+        E4 --> E6[Update room state]
+        E5 --> E6
+    end
+    
+    subgraph Logging ["Real-time Logging"]
+        L1[All application events\nand activities] --> L2[Log processing]
+        L2 --> L3[Stream logs to UI\nvia WebSockets]
+        L3 --> L4[Real-time monitoring\nand troubleshooting]
+    end
+    
+    %% Connect the subgraphs
+    DigitalSambaSetup --> ConferenceManagement
+    DS6 --> CallHandling
+    CM8 --> CallHandling
+    B7 --> ParticipantFlow
+    C11 --> WebhookFlow
+    C12 --> WebhookFlow
+    C13 --> DisconnectFlow
+    E6 --> Logging
+    
+    %% Connect logging to all major components
+    DigitalSambaSetup -.-> L1
+    ConferenceManagement -.-> L1
+    CallHandling -.-> L1
+    ParticipantFlow -.-> L1
+    DisconnectFlow -.-> L1
+    WebhookFlow -.-> L1
 ```
-+----------------------+     HTTP Requests     +---------------------------+
-|                      |<--------------------- |                           |
-|     Web Browser      |                       |      Express Server       |
-|    (Public UI)       |---------------------> |   (Running on port 3030)  |
-|                      |     HTTP Responses    |                           |
-+----------+-----------+                       +-----------+---------------+
-           ^                                               |
-           |                                               |
-           |                                               v
-           |                                   +-----------+---------------+
-           |                WebSocket          |                           |
-           +-------------------------------    |   WebSocket Server       |
-                 (Log streaming)               | (On same port as Express) |
-                                               |                           |
-                                               +-----------+---------------+
-                                                           |
-                  +------------------------------------+   |   +--------------------------------+
-                  |                                    |   |   |                                |
-                  v                                    v   v   v                                |
-        +---------+---------+            +-------------+---+------------+            +---------+--------+
-        |                   |            |                              |            |                  |
-        |  SQLite Database  |<---------->|   Application Business Logic |<---------->| External Services|
-        | conference_data.db|            |                              |            |                  |
-        |                   |            +-------------+----------------+            +---------+--------+
-        +-------------------+                          |                                      |
-               ^   |                                   |                                      |
-               |   |                                   v                                      v
-               |   |                       +----------+------------+             +-----------+-----------+
-               |   |                       |                       |             |                       |
-               |   |                       |  Webhook Listeners    |             |  Sinch Voice API      |
-               |   |                       |                       |             |  - Mute/Unmute        |
-               |   |                       +----------+------------+             |  - Kick               |
-               |   |                                  ^                          |  - Conference control |
-               |   |                                  |                          |                       |
-               |   |                                  |                          +-----------^-----------+
-               |   |                                  |                                      |
-               |   |                       +----------+------------+             +-----------+-----------+
-               |   |                       |                       |             |                       |
-               |   |                       | External Applications |------------>| Digital Samba         |
-               |   |                       | (Sinch & Digital     |   Webhook   | - Video conferencing  |
-               |   |                       |  Samba)              |   Events    | - Room management     |
-               |   |                       |                       |             |                       |
-               |   |                       +-----------------------+             +-----------^-----------+
-               |   |                                                                         |
-               |   +-------------------------------------------------------------------------+
-               |                      Notification Flow                                      |
-               +-------------------------------------------------------------------------------
-```
-
-## Application Flow Description
-
-### 1. User Interface Flow
-- Users interact with the web UI running in their browser
-- The UI communicates with the Express server via HTTP requests
-- Real-time server logs are streamed to the UI via WebSockets
-
-### 2. Conference Management Flow
-- UI sends requests to create/manage conferences and users
-- Express server processes these requests and stores data in SQLite
-- When needed, the server communicates with Sinch Voice API
-
-### 3. Call Handling Flow
-- Sinch Voice API sends webhooks to `/VoiceEvent` endpoint
-- Server processes these events (ICE, ACE, DICE) to track active calls
-- Call state is stored in the database
-- UI displays active calls and allows mute/unmute operations
-
-### 4. Digital Samba Integration Flow
-- Digital Samba sends events to `/DigitalSambaListener` endpoint
-- Server authenticates these requests using the webhook secret
-- Events for mute/unmute trigger corresponding Sinch API calls
-- Server maps Digital Samba room IDs to Sinch conference IDs
-
-### 5. Participant Join/Leave Notification Flow
-- When a user joins a Sinch conference via phone:
-  - User enters their PIN
-  - System validates PIN against the database
-  - If valid, the user is added to the `live_calls` table
-  - System checks if this conference is linked to a Digital Samba room
-  - If linked, the system determines if this is a SIP user (video bridge) or PSTN user (phone)
-  
-- **SIP User Join flow**:
-  - When a SIP (video bridge) user joins the conference:
-    - System queries database for all existing PSTN participants in this conference
-    - For each PSTN participant, system notifies Digital Samba that a phone user has joined
-    - This ensures Digital Samba knows about all phone users already in the call
-
-- **PSTN User Join flow**:
-  - When a regular phone user joins:
-    - System checks if a SIP user (video bridge) is active in the conference
-    - If a SIP user is active, system notifies Digital Samba about the phone user joining
-    - If no SIP user is active, no notification is sent (as there's no video session to notify)
-
-- **User Leave flow**:
-  - When any user disconnects from the conference (DICE event):
-    - System retrieves user details before removing from database
-    - If it's a SIP user leaving, notifies Digital Samba about all PSTN users leaving
-    - If it's a PSTN user leaving (and a SIP user is still active), notifies Digital Samba
-    - Finally removes the call record from the `live_calls` table
-
-### 6. Data Flow
-- Conference and user data is persisted in SQLite
-- Active call information is updated in real-time
-- UI refreshes call data periodically
