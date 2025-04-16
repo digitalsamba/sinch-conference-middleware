@@ -209,7 +209,7 @@ Administrators can monitor system activity and troubleshoot issues as they occur
 
 Note: This logging system covers all components of the application, providing end-to-end visibility
 
-Integration Overview
+**Integration Overview**
 The application creates a bridge between Digital Samba web conferences and traditional phone conferences by:
 
 Establishing Digital Samba rooms as the foundation
