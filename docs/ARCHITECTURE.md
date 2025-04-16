@@ -210,13 +210,13 @@ Administrators can monitor system activity and troubleshoot issues as they occur
 Note: This logging system covers all components of the application, providing end-to-end visibility
 
 **Integration Overview**
-The application creates a bridge between Digital Samba web conferences and traditional phone conferences by:
+*The application creates a bridge between Digital Samba web conferences and traditional phone conferences by:*
 
-Establishing Digital Samba rooms as the foundation
-Providing management interfaces for conference configuration
-Processing call events from the Sinch Voice API
-Route users to appropiate conferences based on their PIN
-Tracking phone participants in Digital Samba rooms
-Processing Digital Samba in room events to control connected phone users via the Sinch API
-Providing comprehensive real-time logging
+-Establishing Digital Samba rooms as the foundation
+-Providing management interfaces for conference configuration
+-Processing call events from the Sinch Voice API
+-Route users to appropiate conferences based on their PIN
+-Tracking phone participants in Digital Samba rooms
+-Processing Digital Samba in room events to control connected phone users via the Sinch API
+-Providing comprehensive real-time logging
 
