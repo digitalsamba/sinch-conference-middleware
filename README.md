@@ -69,7 +69,7 @@ DATABASE_PATH=./conference_data.db: Path to the SQLite database file
 ## API Endpoints
 
 *   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, ACE, DICE).
-*   `/DigitalSambaListener` (POST): Endpoint for Digital Samba room events (phone_user_mute/phone_user_unmute). 
+*   `/DigitalSambaListener` (POST): Endpoint for Digital Samba room event callbacks (phone_user_mute/phone_user_unmute). 
 
 *   `/api/conference` (POST): Create a new conference.
 *   `/api/conferences` (GET): List all conferences.
