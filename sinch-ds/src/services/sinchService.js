@@ -21,7 +21,8 @@ const getAuthHeader = () => {
     throw new Error('Missing Sinch API credentials');
   }
   
-  return `Basic ${Buffer.from(`${applicationKey}:${applicationSecret}`).toString('base64')}`;
+  // Add space between 'Basic ' and the encoded string to match exactly with the documentation
+  return 'Basic ' + Buffer.from(`${applicationKey}:${applicationSecret}`).toString('base64');
 };
 
 /**
@@ -32,8 +33,8 @@ const getAuthHeader = () => {
  */
 export const kickParticipant = async (conferenceId, callId) => {
   try {
-    const kickEndpoint = `/calling/v1/conferences/id/${conferenceId}/${callId}`;
-    const url = `${SINCH_BASE_URL}${kickEndpoint}`;
+    // Format the URL exactly as shown in the documentation
+    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${conferenceId}/${callId}`;
     
     console.log(`Attempting to kick participant: ${callId} from conference: ${conferenceId}`);
     console.log(`Using endpoint: ${url}`);
@@ -41,8 +42,8 @@ export const kickParticipant = async (conferenceId, callId) => {
     const response = await fetch(url, {
       method: 'DELETE',
       headers: {
-        'Authorization': getAuthHeader(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': getAuthHeader()
       }
     });
     
@@ -61,7 +62,7 @@ export const kickParticipant = async (conferenceId, callId) => {
         success: false,
         status: response.status,
         error: errorData,
-        endpoint: kickEndpoint
+        endpoint: url
       };
     }
     
@@ -82,8 +83,8 @@ export const kickParticipant = async (conferenceId, callId) => {
  */
 export const muteParticipant = async (conferenceId, callId) => {
   try {
-    const muteEndpoint = `/calling/v1/conferences/id/${conferenceId}/${callId}`;
-    const url = `${SINCH_BASE_URL}${muteEndpoint}`;
+    // Format the URL exactly as shown in the documentation
+    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${conferenceId}/${callId}`;
     
     console.log(`Attempting to mute participant: ${callId} in conference: ${conferenceId}`);
     console.log(`Using endpoint: ${url}`);
@@ -91,8 +92,8 @@ export const muteParticipant = async (conferenceId, callId) => {
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
-        'Authorization': getAuthHeader(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': getAuthHeader()
       },
       body: JSON.stringify({ command: 'mute' })
     });
@@ -112,7 +113,7 @@ export const muteParticipant = async (conferenceId, callId) => {
         success: false,
         status: response.status,
         error: errorData,
-        endpoint: muteEndpoint
+        endpoint: url
       };
     }
     
@@ -133,8 +134,8 @@ export const muteParticipant = async (conferenceId, callId) => {
  */
 export const unmuteParticipant = async (conferenceId, callId) => {
   try {
-    const unmuteEndpoint = `/calling/v1/conferences/id/${conferenceId}/${callId}`;
-    const url = `${SINCH_BASE_URL}${unmuteEndpoint}`;
+    // Format the URL exactly as shown in the documentation
+    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${conferenceId}/${callId}`;
     
     console.log(`Attempting to unmute participant: ${callId} in conference: ${conferenceId}`);
     console.log(`Using endpoint: ${url}`);
@@ -142,8 +143,8 @@ export const unmuteParticipant = async (conferenceId, callId) => {
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
-        'Authorization': getAuthHeader(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': getAuthHeader()
       },
       body: JSON.stringify({ command: 'unmute' })
     });
@@ -163,7 +164,7 @@ export const unmuteParticipant = async (conferenceId, callId) => {
         success: false,
         status: response.status,
         error: errorData,
-        endpoint: unmuteEndpoint
+        endpoint: url
       };
     }
     
