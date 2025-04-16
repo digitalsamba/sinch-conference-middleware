@@ -1,6 +1,6 @@
 # Sinch Conference Middleware
 
-This project provides a middleware service to manage [Sinch](https://www.sinch.com) voice conferences and integrate them with [Digital Samba](https://www.digitalsamba.com) rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), notifies Digital Samba when a phone user has joined or left a Digital Samba room, handles phone_user_muted and phone_user_unmuted events from DigitalSamba and provides a simple web UI for interaction and demoing the incorporated functionality.
+This project provides a middleware service to manage [Sinch](https://www.sinch.com) voice conferences and integrate them with [Digital Samba](https://www.digitalsamba.com) rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, PIE, DICE), notifies Digital Samba when a phone user has joined or left a Digital Samba room, handles phone_user_muted and phone_user_unmuted events from DigitalSamba and provides a simple web UI for interaction and demoing the incorporated functionality.
 
 References :  [Sinch Voice API](https://developers.sinch.com/docs/voice) || [Digital Samba API](https://developer.digitalsamba.com/rest-api/) 
 
@@ -9,7 +9,7 @@ References :  [Sinch Voice API](https://developers.sinch.com/docs/voice) || [Dig
 *   **Conference Management:** Create, list, and delete conferences.
 *   **Phone User Management:** Add users (with PINs, display names, external IDs) to conferences, list users, remove users.
 *   **Digital Samba Integration** Associate Sinch conferences with Digital Samba room IDs for Sinch conference participation and management from a Digital Samba room.
-*   **Sinch Voice Callback Handling:** Processes ICE, ACE, and DICE events from Sinch via a webhook.
+*   **Sinch Voice Callback Handling:** Processes ICE, PIE, and DICE events from Sinch via a webhook.
 *   **Digital Samba Callback Handling:** Processes phone_participant_muted & phone_participant_unmuted events sent from Digital Samba via a webhook. 
 *   **Database Persistence:** Stores conference and user data in SQLite.
 *   **Web UI:** Simple frontend for managing conferences, users, and viewing active calls.
