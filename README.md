@@ -2,6 +2,8 @@
 
 This project provides a middleware service to manage [Sinch](https://www.sinch.com) voice conferences and integrate them with [Digital Samba](https://www.digitalsamba.com) rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), notifies Digital Samba when a phone user has joined or left a Digital Samba room, handles phone_user_muted and phone_user_unmuted events from DigitalSamba and provides a simple web UI for interaction and demoing the incorporated functionality.
 
+References :  [Sinch Voice API](https://developers.sinch.com/docs/voice)  [Digital Samba API] (https://developer.digitalsamba.com/rest-api/) 
+
 ## Features
 
 *   **Conference Management:** Create, list, and delete conferences.
