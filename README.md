@@ -33,18 +33,21 @@ SINCH_APPLICATION_KEY=YOUR_SINCH_APP_KEY
 SINCH_APPLICATION_SECRET=YOUR_SINCH_APP_SECRET
 SINCH_REGION=europe # Optional: Region for Sinch API calls (defaults to 'europe', options: 'global', 'europe', 'northAmerica', 'southAmerica', 'asiaSouthEast1', 'asiaSouthEast2'). Only change this if you know room SIP with be connecting from a non-European trunk.
 
-# Server Configuration
-PORT=3030 # Optional: Port for the HTTP/WebSocket server (defaults to 3030)
-
-# Digital Samba Configuration (Optional)
+# Digital Samba Configuration 
 DIGITAL_SAMBA_API_KEY=YOUR_DS_API_KEY
 DIGITAL_SAMBA_API_SECRET=YOUR_DS_API_SECRET
 DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API endpoint
 DIGITAL_SAMBA_WEBHOOK_SECRET=DigitalSambaListener # Secret for authenticating Digital Samba webhook calls
-SEND_CALLER_NUMBER=true # Optional: Set to 'false' to omit caller numbers from Digital Samba notifications
+
+# Server Configuration
+PORT=3030 # Optional: Port for the HTTP/WebSocket server (defaults to 3030)
 
 # Database Configuration
 DATABASE_PATH=./conference_data.db: Path to the SQLite database file
+
+# MISC
+SEND_CALLER_NUMBER=true # Optional: Set to 'false' to omit caller numbers from Digital Samba notifications
+
 ```
 
 ## Setup and Running
