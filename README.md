@@ -73,7 +73,7 @@ SEND_CALLER_NUMBER=true # Optional: Set to 'false' to omit caller numbers from D
 
 ## API Endpoints
 
-*   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, ACE, DICE).
+*   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, PIE, DICE).
 *   `/DigitalSambaListener` (POST): Endpoint for Digital Samba room event callbacks (phone_user_mute/phone_user_unmute). 
 
 *   `/api/conference` (POST): Create a new conference.
