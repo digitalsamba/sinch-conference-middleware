@@ -39,11 +39,12 @@ export const notifyPhoneParticipantJoined = async (roomId, participant) => {
   try {
     const endpoint = `/api/v1/rooms/${roomId}/phone-participants/joined`;
     const url = `${DS_BASE_URL}${endpoint}`;
-    
-    console.log(`Notifying Digital Samba that phone participant joined room: ${roomId}`);
+      console.log(`Notifying Digital Samba that phone participant joined room: ${roomId}`);
     console.log(`Using endpoint: ${url}`);
-      // Format the participant data according to API requirements
-    // The API expects an array of participants with call_id, caller_number, and optional name and external_id    const formattedParticipant = {
+    
+    // Format the participant data according to API requirements
+    // The API expects an array of participants with call_id, caller_number, and optional name and external_id    
+    const formattedParticipant = {
       call_id: participant.id
     };
 
