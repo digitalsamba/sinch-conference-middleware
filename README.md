@@ -1,15 +1,14 @@
 # Sinch Conference Middleware
 
-This project provides a middleware service to manage Sinch voice conferences and integrate them with Digital Samba rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), notifies Digital Samba when a phone user has joined or left a Digital Samba room, handles phone_user_muted and phone_user_unmuted events from DigitalSamba and provides a simple web UI for interaction and demoing the incorporated functionality.
+This project provides a middleware service to manage [Sinch](https://www.sinch.com) voice conferences and integrate them with [Digital Samba](https://www.digitalsamba.com) rooms. It offers a RESTful API for conference and user management, handles Sinch callbacks (ICE, ACE, DICE), notifies Digital Samba when a phone user has joined or left a Digital Samba room, handles phone_user_muted and phone_user_unmuted events from DigitalSamba and provides a simple web UI for interaction and demoing the incorporated functionality.
 
 ## Features
 
 *   **Conference Management:** Create, list, and delete conferences.
 *   **Phone User Management:** Add users (with PINs, display names, external IDs) to conferences, list users, remove users.
+*   **Digital Samba Integration** Associate Sinch conferences with Digital Samba room IDs for Sinch conference participation and management from a Digital Samba room.
 *   **Sinch Voice Callback Handling:** Processes ICE, ACE, and DICE events from Sinch via a webhook.
 *   **Digital Samba Callback Handling:** Processes phone_participant_muted & phone_participant_unmuted events sent from Digital Samba via a webhook. 
-*   **Digital Samba Integration** Associate Sinch conferences with Digital Samba room IDs for Sinch conference participation and management from a Digital Samba room.
-*   **Live Call Management:** View active calls per conference, mute and unmute participants via the UI. 
 *   **Database Persistence:** Stores conference and user data in SQLite.
 *   **Web UI:** Simple frontend for managing conferences, users, and viewing active calls.
 *   **Real-time server log streaming via WebSockets to the frontend UI.**
@@ -22,6 +21,7 @@ This project provides a middleware service to manage Sinch voice conferences and
 *   npm
 *   Sinch Account (Application Key and Secret)
 *   (Optional) Docker
+*   Digital Samba account with telephony enabled (Developer key)
 
 ## Environment Variables
 
@@ -40,6 +40,7 @@ DIGITAL_SAMBA_API_KEY=YOUR_DS_API_KEY
 DIGITAL_SAMBA_API_SECRET=YOUR_DS_API_SECRET
 DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API endpoint
 DIGITAL_SAMBA_WEBHOOK_SECRET=DigitalSambaListener # Secret for authenticating Digital Samba webhook calls
+SEND_CALLER_NUMBER=true # Optional: Set to 'false' to omit caller numbers from Digital Samba notifications
 
 # Database Configuration
 DATABASE_PATH=./conference_data.db: Path to the SQLite database file
@@ -127,7 +128,7 @@ This repository uses GitHub Actions for continuous integration and deployment. T
 *   `DATABASE_PATH` (optional, defaults to `./conference_data.db` in the action)
 *   `DIGITAL_SAMBA_API_KEY` 
 *   `DIGITAL_SAMBA_API_SECRET`
-*   `DIGITAL_SAMBA_API_URL`
+*   `DIGITAL_SAMBA_API_URL` (optional, defaults to https://api.digitalsamba.com)
 *   `DEPLOYMENT_PATH` (optional, defaults to `/opt/deployment/sinch-ds-dev` in the action)
 *   `SERVER_HOST`
 *   `SERVER_USER`

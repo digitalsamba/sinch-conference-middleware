@@ -7,8 +7,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Base URL for Digital Samba API from environment variables
-const DS_BASE_URL = process.env.DIGITAL_SAMBA_API_URL || 'https://dev-api.monza.digitalsamba.com';
+const DS_BASE_URL = process.env.DIGITAL_SAMBA_API_URL || 'https://api.digitalsamba.com';
 const DS_API_KEY = process.env.DIGITAL_SAMBA_DEVELOPER_KEY;
+// Control whether caller numbers are sent to Digital Samba (defaults to true)
+const SEND_CALLER_NUMBER = process.env.SEND_CALLER_NUMBER !== 'false';
 
 /**
  * Creates authorization header for Digital Samba API requests
@@ -40,13 +42,25 @@ export const notifyPhoneParticipantJoined = async (roomId, participant) => {
     
     console.log(`Notifying Digital Samba that phone participant joined room: ${roomId}`);
     console.log(`Using endpoint: ${url}`);
-    
-    // Format the participant data according to API requirements
-    // The API expects an array of participants with call_id, caller_number, and optional name and external_id
-    const formattedParticipant = {
-      call_id: participant.id,
-      caller_number: participant.phoneNumber
+      // Format the participant data according to API requirements
+    // The API expects an array of participants with call_id, caller_number, and optional name and external_id    const formattedParticipant = {
+      call_id: participant.id
     };
+
+    // Format and include phoneNumber based on environment setting
+    if (participant.phoneNumber && SEND_CALLER_NUMBER) {
+      // Check if the phone number consists only of digits
+      if (/^\d+$/.test(participant.phoneNumber)) {
+        // Prepend "+" to convert to international format
+        formattedParticipant.caller_number = `+${participant.phoneNumber}`;
+        console.log(`Converted phone number to international format: ${formattedParticipant.caller_number}`);
+      } else {
+        // Use as-is if it already has a "+" or contains non-digit characters
+        formattedParticipant.caller_number = participant.phoneNumber;
+      }
+    } else if (!SEND_CALLER_NUMBER) {
+      console.log('Caller number omitted from Digital Samba notification as per configuration');
+    }
     
     // Add optional fields if they exist
     if (participant.name) {
