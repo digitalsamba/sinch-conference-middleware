@@ -24,7 +24,7 @@ jobs:
       
       - name: Build and Push Docker Image
         run: |
-          docker build -t digitalsamba376/sinch-ds:${{ github.ref_name }} -f Dockerfile-prod .
+          docker build -t digitalsamba376/sinch-ds:${{ github.ref_name }} ./sinch-ds
           docker push digitalsamba376/sinch-ds:${{ github.ref_name }}
       
       - name: Deploy to Server via SSH
