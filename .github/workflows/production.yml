@@ -5,12 +5,20 @@ on:
       - '[0-9]+.[0-9]+.[0-9]+'
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    environment: production  # Specify the development environment to use its secrets
     steps:
-    
+      # Check out the repository code    
       - name: Checkout repository
         uses: actions/checkout@v4
       
+      # Log in to Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}  
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
@@ -26,14 +34,32 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            sudo docker pull digitalsamba376/sinch-ds:${{ github.ref_name }}
+            # Define deployment path using secret
+            DEPLOY_PATH="${{ secrets.DEPLOYMENT_PATH }}"
+            # Set default value if secret is empty
+            DEPLOY_PATH=${DEPLOY_PATH:-/opt/deployment/sinch-ds-prod}                     
+            echo "Pulling production Docker image..."
+            sudo docker pull digitalsamba376/sinch-ds:${{ github.ref_name }}      
+            echo "Stopping and removing existing container (if any)..."
             sudo docker stop sinch-ds-prod || true
-            sudo docker rm sinch-ds-prod || true
+            sudo docker rm sinch-ds-prod || true            
+            echo "Starting new container..."
             sudo docker run -d --rm \
                             --name sinch-ds-prod \
                             --network deployment_proxy \
-                            -p 4040:3030 \
-                            -e VIRTUAL_HOST=${{ secrets.PRODUCTION_HOST }} \
-                            -e LETSENCRYPT_HOST=${{ secrets.PRODUCTION_HOST }} \
-                            -e VIRTUAL_PORT=3030 \
+                            -p ${{ secrets.PORT || 4030 }}:${{ secrets.PORT || 3030 }} \
+                            -p ${{ secrets.WS_PORT || 4031 }}:${{ secrets.WS_PORT || 3031 }} \
+                            -e VIRTUAL_HOST=${{ secrets.PRODUCTION_HOST  }} \
+                            -e LETSENCRYPT_HOST=${{ secrets.PRODUCTION_HOST  }} \
+                            -e VIRTUAL_PORT=${{ secrets.PORT || 3030 }} \
+                            -e PORT=${{ secrets.PORT || 3030 }} \
+                            -e WS_PORT=${{ secrets.WS_PORT || 3031 }} \
+                            -e SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }} \
+                            -e SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }} \
+                            -e DIGITAL_SAMBA_TEAM_ID=${{ secrets.DIGITAL_SAMBA_TEAM_ID }} \
+                            -e DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }} \
+                            -e DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }} \
+                            -e DATABASE_PATH=/app/conference_data.db \
+                            -v $DEPLOY_PATH/conference_data.db:/app/conference_data.db \
                             digitalsamba376/sinch-ds:${{ github.ref_name }}
+            echo "Deployment script finished."
