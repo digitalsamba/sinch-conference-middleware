@@ -36,8 +36,7 @@ SINCH_APPLICATION_SECRET=YOUR_SINCH_APP_SECRET
 SINCH_REGION=europe # Optional: Region for Sinch API calls (defaults to 'europe', options: 'global', 'europe', 'northAmerica', 'southAmerica', 'asiaSouthEast1', 'asiaSouthEast2'). Only change this if you know room SIP with be connecting from a non-European trunk.
 
 # Digital Samba Configuration 
-DIGITAL_SAMBA_API_KEY=YOUR_DS_API_KEY
-DIGITAL_SAMBA_API_SECRET=YOUR_DS_API_SECRET
+DIGITAL_SAMBA_DEVELOPER_KEY=YOUR_DS_DEVELOPER_KEY
 DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API endpoint
 DIGITAL_SAMBA_WEBHOOK_SECRET=DigitalSambaListener # Secret for authenticating Digital Samba webhook calls
 
@@ -92,6 +91,20 @@ SEND_CALLER_NUMBER=true # Optional: Set to 'false' to omit caller numbers from D
 
 
 
+## Running with Docker Compose
+
+The quickest path. From the repository root:
+
+```bash
+cp sinch-ds/.env.sample sinch-ds/.env   # then fill it in
+docker compose up -d --build
+```
+
+The service listens on `http://localhost:3030`. The SQLite database is kept on a
+named volume (`sinch-data`) so it survives `docker compose down` and rebuilds,
+and the container is set to `restart: unless-stopped` so it comes back after a
+host reboot or a Docker daemon restart.
+
 ## Docker Support
 
 A `Dockerfile` is provided in the `sinch-ds` directory for building a container image.
@@ -105,7 +118,7 @@ A `Dockerfile` is provided in the `sinch-ds` directory for building a container 
     *Make sure you have a `.env` file in the `sinch-ds` directory.*
     ```bash
     # For Linux/macOS:
-    docker run -p 3030:3030 --env-file .env -v "$(pwd)/conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
+    docker run -d --restart unless-stopped -p 3030:3030 --env-file .env -v "$(pwd)/conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     # For Windows (Command Prompt):
     docker run -p 3030:3030 --env-file .env -v "%cd%\conference_data.db":/app/conference_data.db --name sinch-middleware sinch-conference-middleware
     # For Windows (PowerShell):
@@ -134,8 +147,8 @@ This repository uses GitHub Actions for continuous integration and deployment. T
 *   `SINCH_APPLICATION_SECRET`
 *   `PORT` (optional, defaults to 3030 in the action)
 *   `DATABASE_PATH` (optional, defaults to `./conference_data.db` in the action)
-*   `DIGITAL_SAMBA_API_KEY` 
-*   `DIGITAL_SAMBA_API_SECRET`
+*   `DIGITAL_SAMBA_DEVELOPER_KEY`
+*   `DIGITAL_SAMBA_TEAM_ID`
 *   `DIGITAL_SAMBA_API_URL` (optional, defaults to https://api.digitalsamba.com)
 *   `DEPLOYMENT_PATH` (optional, defaults to `/opt/deployment/sinch-ds-dev` in the action)
 *   `SERVER_HOST`
