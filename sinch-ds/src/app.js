@@ -19,10 +19,16 @@ import {
     getLiveCall
 } from './database.js';
 import { captureRawBody } from './middleware/rawbody.js';
+import { requireAdmin, resolveAdminAuth, safeEqual } from './middleware/auth.js';
 import sinchService from './services/sinchService.js';
 import { voiceController } from './voice/controller.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export const DEFAULT_DS_WEBHOOK_SECRET = 'DigitalSambaListener';
+
+// Paths that authenticate themselves (Sinch signature / DS bearer secret) or must stay open.
+const PUBLIC_PATHS = new Set(['/VoiceEvent', '/DigitalSambaListener', '/healthz']);
 
 /**
  * Builds the Express application. The database must already be initialised.
@@ -31,8 +37,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const createApp = ({
     sinchApplicationKey = process.env.SINCH_APPLICATION_KEY,
     sinchApplicationSecret = process.env.SINCH_APPLICATION_SECRET,
-    digitalSambaWebhookSecret = process.env.DIGITAL_SAMBA_WEBHOOK_SECRET || 'DigitalSambaListener',
+    digitalSambaWebhookSecret = process.env.DIGITAL_SAMBA_WEBHOOK_SECRET || DEFAULT_DS_WEBHOOK_SECRET,
+    adminAuth = resolveAdminAuth(),
+    corsOrigin = process.env.CORS_ORIGIN,
 } = {}) => {
+    if (digitalSambaWebhookSecret === DEFAULT_DS_WEBHOOK_SECRET) {
+        console.warn('DIGITAL_SAMBA_WEBHOOK_SECRET is unset or the published default; anyone can call /DigitalSambaListener. Set a random value.');
+    }
+    if (adminAuth.mode === 'locked') {
+        console.warn('ADMIN_USERNAME/ADMIN_PASSWORD not set: web UI, /api/* and the log stream are disabled.');
+    } else if (adminAuth.mode === 'open') {
+        console.warn('ADMIN_AUTH_DISABLED=true: web UI, /api/* and the log stream are open to anyone who can reach this port.');
+    }
+
     // --- Middleware for Digital Samba Webhook Authentication ---
     const verifyDigitalSambaAuth = (req, res, next) => {
         const expectedAuthHeader = `Bearer ${digitalSambaWebhookSecret}`;
@@ -43,7 +60,7 @@ export const createApp = ({
             return res.status(401).json({ error: 'Authorization header is required' });
         }
 
-        if (authHeader !== expectedAuthHeader) {
+        if (!safeEqual(authHeader, expectedAuthHeader)) {
             console.warn('Digital Samba webhook received with invalid Authorization header');
             return res.status(403).json({ error: 'Invalid Authorization header' });
         }
@@ -54,8 +71,19 @@ export const createApp = ({
 
     const app = express();
 
-    // Middleware
-    app.use(cors());
+    app.disable('x-powered-by');
+
+    // Liveness probe for Docker/monitoring; touches nothing.
+    app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
+
+    // CORS is opt-in: the bundled UI is same-origin and needs none.
+    if (corsOrigin) {
+        app.use(cors({ origin: corsOrigin.split(',').map((o) => o.trim()) }));
+    }
+
+    // Everything except the self-authenticating webhooks is admin-only.
+    const adminGate = requireAdmin(adminAuth);
+    app.use((req, res, next) => (PUBLIC_PATHS.has(req.path) ? next() : adminGate(req, res, next)));
 
     // /VoiceEvent needs the raw body for Sinch signature validation; everything else is JSON.
     const jsonParser = express.json();

@@ -4,6 +4,7 @@ import './env.js';
 import { initializeDatabase, closeDatabase } from './database.js';
 import { createApp } from './app.js';
 import { installLogBroadcast, attachLogWebSocket } from './logStream.js';
+import { resolveAdminAuth, checkAdminRequest } from './middleware/auth.js';
 
 const PORT = process.env.PORT || 3030;
 
@@ -18,9 +19,13 @@ try {
     process.exit(1);
 }
 
-const app = createApp();
+const adminAuth = resolveAdminAuth();
+const app = createApp({ adminAuth });
 const server = http.createServer(app);
-const wss = attachLogWebSocket(server);
+// The log stream carries caller numbers and call IDs: same credentials as the UI.
+const wss = attachLogWebSocket(server, {
+    verifyClient: ({ req }) => checkAdminRequest(adminAuth, req.headers.authorization) === 'ok',
+});
 
 server.listen(PORT, () => {
     console.log(`HTTP Server listening on port ${PORT}`);
