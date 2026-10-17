@@ -4,6 +4,10 @@
  */
 import '../env.js';
 
+// Sinch waits only a few seconds for our PIE/DICE answers, and these calls happen
+// inside them; never let a slow upstream hang the call flow.
+const OUTBOUND_TIMEOUT_MS = 5000;
+
 
 // Available Sinch API endpoints
 const SINCH_ENDPOINTS = {
@@ -44,12 +48,13 @@ const getAuthHeader = () => {
 export const kickParticipant = async (conferenceId, callId) => {
   try {
     // Format the URL exactly as shown in the documentation
-    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${conferenceId}/${callId}`;
+    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${encodeURIComponent(conferenceId)}/${encodeURIComponent(callId)}`;
     
     console.log(`Attempting to kick participant: ${callId} from conference: ${conferenceId}`);
     console.log(`Using endpoint: ${url}`);
     
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -94,12 +99,13 @@ export const kickParticipant = async (conferenceId, callId) => {
 export const muteParticipant = async (conferenceId, callId) => {
   try {
     // Format the URL exactly as shown in the documentation
-    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${conferenceId}/${callId}`;
+    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${encodeURIComponent(conferenceId)}/${encodeURIComponent(callId)}`;
     
     console.log(`Attempting to mute participant: ${callId} in conference: ${conferenceId}`);
     console.log(`Using endpoint: ${url}`);
     
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -145,12 +151,13 @@ export const muteParticipant = async (conferenceId, callId) => {
 export const unmuteParticipant = async (conferenceId, callId) => {
   try {
     // Format the URL exactly as shown in the documentation
-    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${conferenceId}/${callId}`;
+    const url = `${SINCH_BASE_URL}/calling/v1/conferences/id/${encodeURIComponent(conferenceId)}/${encodeURIComponent(callId)}`;
     
     console.log(`Attempting to unmute participant: ${callId} in conference: ${conferenceId}`);
     console.log(`Using endpoint: ${url}`);
     
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

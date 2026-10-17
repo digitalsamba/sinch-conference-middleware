@@ -4,6 +4,10 @@
  */
 import '../env.js';
 
+// Sinch waits only a few seconds for our PIE/DICE answers, and these calls happen
+// inside them; never let a slow upstream hang the call flow.
+const OUTBOUND_TIMEOUT_MS = 5000;
+
 
 // Base URL for Digital Samba API from environment variables
 const DS_BASE_URL = process.env.DIGITAL_SAMBA_API_URL || 'https://api.digitalsamba.com';
@@ -36,7 +40,7 @@ const getAuthHeader = () => {
  */
 export const notifyPhoneParticipantJoined = async (roomId, participant) => {
   try {
-    const endpoint = `/api/v1/rooms/${roomId}/phone-participants/joined`;
+    const endpoint = `/api/v1/rooms/${encodeURIComponent(roomId)}/phone-participants/joined`;
     const url = `${DS_BASE_URL}${endpoint}`;
       console.log(`Notifying Digital Samba that phone participant joined room: ${roomId}`);
     console.log(`Using endpoint: ${url}`);
@@ -78,6 +82,7 @@ export const notifyPhoneParticipantJoined = async (roomId, participant) => {
     console.log(`Payload sent to Digital Samba: ${JSON.stringify(payload, null, 2)}`);
     
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
       method: 'POST',
       headers: {
         'Authorization': getAuthHeader(),
@@ -125,7 +130,7 @@ export const notifyPhoneParticipantJoined = async (roomId, participant) => {
  */
 export const notifyPhoneParticipantLeft = async (roomId, callId) => {
   try {
-    const endpoint = `/api/v1/rooms/${roomId}/phone-participants/left`;
+    const endpoint = `/api/v1/rooms/${encodeURIComponent(roomId)}/phone-participants/left`;
     const url = `${DS_BASE_URL}${endpoint}`;
     
     console.log(`Notifying Digital Samba that phone participant left room: ${roomId}`);
@@ -136,6 +141,7 @@ export const notifyPhoneParticipantLeft = async (roomId, callId) => {
     const payload = [callId];
     
     const response = await fetch(url, {
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
       method: 'POST',
       headers: {
         'Authorization': getAuthHeader(),
