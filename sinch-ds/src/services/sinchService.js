@@ -2,9 +2,8 @@
  * Sinch API Service
  * Handles all interactions with the Sinch Voice API for conference management
  */
-import dotenv from 'dotenv';
+import '../env.js';
 
-dotenv.config();
 
 // Available Sinch API endpoints
 const SINCH_ENDPOINTS = {

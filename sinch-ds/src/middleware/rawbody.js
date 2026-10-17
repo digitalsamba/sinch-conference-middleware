@@ -1,25 +1,23 @@
-import getRawBody from 'raw-body';
-import contentType from 'content-type';
+import express from 'express';
+
+// Sinch signs the exact bytes it sends, so /VoiceEvent needs the untouched body.
+// express.text() with a catch-all type keeps it as a string on req.body; we copy it
+// to req.rawBody (the name the signature validator and controller already use).
+const textParser = express.text({ type: () => true, limit: '1mb' });
 
 export const captureRawBody = (req, res, next) => {
-  // Skip if the request has no body or if it has already been processed
-  if (!req.headers['content-type'] || req.rawBody) {
+  // Skip if the request has no body type or if it has already been processed
+  if (!req.headers['content-type'] || req.rawBody !== undefined) {
     return next();
   }
 
-  getRawBody(req, {
-    length: req.headers['content-length'],
-    limit: '1mb',
-    encoding: contentType.parse(req.headers['content-type']).parameters.charset || 'utf-8'
-  })
-    .then((buffer) => {
-      req.rawBody = buffer.toString();
-      
-      // Don't try to parse the body here, we'll let Express do that
-      next();
-    })
-    .catch((err) => {
-      console.error('Error capturing raw body:', err);
-      next(err);
-    });
+  textParser(req, res, (err) => {
+    if (err) {
+      console.error('Error capturing raw body:', err.message);
+      return next(err);
+    }
+    req.rawBody = typeof req.body === 'string' ? req.body : undefined;
+    req.body = undefined;
+    next();
+  });
 };

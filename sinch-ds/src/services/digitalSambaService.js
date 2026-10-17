@@ -2,9 +2,8 @@
  * Digital Samba API Service
  * Handles all interactions with the Digital Samba API
  */
-import dotenv from 'dotenv';
+import '../env.js';
 
-dotenv.config();
 
 // Base URL for Digital Samba API from environment variables
 const DS_BASE_URL = process.env.DIGITAL_SAMBA_API_URL || 'https://api.digitalsamba.com';

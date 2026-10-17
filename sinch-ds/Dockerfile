@@ -1,6 +1,6 @@
 # Set the base image with the specified Node.js version
-ARG NODE_VERSION=22.4.1
-FROM node:${NODE_VERSION}-bullseye-slim
+ARG NODE_VERSION=24
+FROM node:${NODE_VERSION}-bookworm-slim
 
 # Set the environment variable for Node.js to run in production mode
 ENV NODE_ENV=production

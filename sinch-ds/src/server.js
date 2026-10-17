@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
+import './env.js';
 import http from 'http'; // Import http module
 import { WebSocketServer } from 'ws'; // Import WebSocketServer
 
@@ -25,7 +25,6 @@ import {
 import { captureRawBody } from './middleware/rawbody.js';
 import sinchService from './services/sinchService.js';
 
-dotenv.config();
 
 // --- Environment Variables ---
 const DIGITAL_SAMBA_WEBHOOK_SECRET = process.env.DIGITAL_SAMBA_WEBHOOK_SECRET || 'DigitalSambaListener';
