@@ -15,11 +15,12 @@ References :  [Sinch Voice API](https://developers.sinch.com/docs/voice) || [Dig
 *   **Web UI:** Simple frontend for managing conferences, users, and viewing active calls.
 *   **Real-time server log streaming via WebSockets to the frontend UI.**
 *   **Docker Support:** Includes a Dockerfile for containerized deployment.
-*   **GitHub Actions CI/CD:** Automated build, test (placeholder), and Docker image push to GitHub Packages.
+*   **GitHub Actions CI/CD:** Lint, tests and `npm audit` on every PR; Docker image build, push and SSH deploy on `main` (dev) and version tags (production).
+*   **Admin authentication:** The web UI, `/api/*` and the log stream require HTTP Basic credentials.
 
 ## Prerequisites
 
-*   Node.js (v18 or later recommended)
+*   Node.js 24 LTS (22.13 or later works; the app uses the built-in `node:sqlite`, so there are no native modules to compile)
 *   npm
 *   Sinch Account (Application Key and Secret)
 *   (Optional) Docker
@@ -38,13 +39,19 @@ SINCH_REGION=europe # Optional: Region for Sinch API calls (defaults to 'europe'
 # Digital Samba Configuration 
 DIGITAL_SAMBA_DEVELOPER_KEY=YOUR_DS_DEVELOPER_KEY
 DIGITAL_SAMBA_API_URL=https://api.digitalsamba.com # Or your specific DS API endpoint
-DIGITAL_SAMBA_WEBHOOK_SECRET=DigitalSambaListener # Secret for authenticating Digital Samba webhook calls
+DIGITAL_SAMBA_WEBHOOK_SECRET=CHANGE_ME # Bearer secret Digital Samba sends to /DigitalSambaListener. Use a long random value; the old default 'DigitalSambaListener' is public.
+
+# Admin UI / API / log stream (HTTP Basic auth)
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=CHANGE_ME # Long random value. If ADMIN_* are unset the UI and /api/* return 503.
+# ADMIN_AUTH_DISABLED=true # Local demos only: leaves the UI and /api/* open to anyone who can reach the port.
+# CORS_ORIGIN=https://example.com # Optional, comma-separated. CORS is off by default (the bundled UI is same-origin).
 
 # Server Configuration
 PORT=3030 # Optional: Port for the HTTP/WebSocket server (defaults to 3030)
 
 # Database Configuration
-DATABASE_PATH=./conference_data.db: Path to the SQLite database file
+DATABASE_PATH=./conference_data.db # Path to the SQLite database file (the Docker image defaults to /data/conference_data.db)
 
 # MISC
 SEND_CALLER_NUMBER=true # Optional: Set to 'false' to omit caller numbers from Digital Samba notifications
@@ -68,12 +75,29 @@ SEND_CALLER_NUMBER=true # Optional: Set to 'false' to omit caller numbers from D
     npm start
     ```
     The server will start on `http://localhost:3030` (or the `PORT` specified in `.env`). The WebSocket server for logs now runs on the same port.
-5.  **Access the UI:** Open your browser and navigate to `http://localhost:3030`.
+5.  **Access the UI:** Open your browser and navigate to `http://localhost:3030` and sign in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+
+### Tests and lint
+
+```bash
+npm test       # node:test suite: admin auth, API, signed Sinch ICE/PIE/DICE callbacks, DS webhook
+npm run lint   # ESLint
+```
+
+## Security notes
+
+*   **`/VoiceEvent`** accepts only callbacks signed with your Sinch application key/secret, and rejects signed callbacks whose `x-timestamp` is more than 15 minutes off (replay protection). Configure the callback URL in the Sinch dashboard as `https://<host>/VoiceEvent`.
+*   **`/DigitalSambaListener`** requires `Authorization: Bearer <DIGITAL_SAMBA_WEBHOOK_SECRET>`.
+*   **Everything else** (UI, `/api/*`, the log WebSocket) requires `ADMIN_USERNAME` / `ADMIN_PASSWORD`. The live log shows caller numbers and call IDs, and `/api/users` lists dial-in PINs, so do not expose this service with `ADMIN_AUTH_DISABLED=true`.
+*   Never commit `.env`. It is ignored by git and excluded from the Docker build context.
 
 ## API Endpoints
 
 *   `/VoiceEvent` (POST): Endpoint for Sinch voice callbacks (ICE, PIE, DICE).
-*   `/DigitalSambaListener` (POST): Endpoint for Digital Samba room event callbacks (phone_user_mute/phone_user_unmute). 
+*   `/DigitalSambaListener` (POST): Endpoint for Digital Samba room event callbacks (phone_participant_muted/phone_participant_unmuted).
+*   `/healthz` (GET): Liveness probe, unauthenticated.
+
+All `/api/*` endpoints require admin credentials. Bad input returns `400`, an unknown conference `404`, and a duplicate conference ID or PIN `409`. PINs are 1-6 digits.
 
 *   `/api/conference` (POST): Create a new conference.
 *   `/api/conferences` (GET): List all conferences.
@@ -126,37 +150,24 @@ A `Dockerfile` is provided in the `sinch-ds` directory for building a container 
     ```
     *   `-p 3030:3030`: Maps the host port 3030 to the container's HTTP/WebSocket port.
     *   `--env-file .env`: Loads environment variables from your local `.env` file.
-    *   `-v .../conference_data.db:/app/conference_data.db`: Mounts the local database file into the container for persistence. Create an empty `conference_data.db` file first if it doesn't exist (`touch conference_data.db` or `type nul > conference_data.db` on Windows).
+    *   `-v .../conference_data.db:/app/conference_data.db`: Mounts the local database file into the container for persistence (set `DATABASE_PATH=/app/conference_data.db` in `.env`, or mount a directory at `/data` instead). Create an empty `conference_data.db` file first if it doesn't exist (`touch conference_data.db` or `type nul > conference_data.db` on Windows). The container runs as the unprivileged `node` user (uid 1000), so on Linux the file must be writable by uid 1000 (`sudo chown 1000:1000 conference_data.db`).
     *   `--name sinch-middleware`: Assigns a name to the container.
 
 ## GitHub Actions CI/CD
 
-This repository uses GitHub Actions for continuous integration and deployment. The workflow (`.github/workflows/main.yml`) performs the following:
+*   **`ci.yml`** runs on every pull request and push to `main`: `npm ci`, `npm run lint`, `npm test`, `npm audit --omit=dev --audit-level=high`, then builds the image and waits for its health check.
+*   **`main.yml`** (push to `main`) runs CI, then builds and pushes `digitalsamba376/sinch-ds:latest` and deploys it over SSH as `sinch-ds-dev`.
+*   **`production.yml`** (tag `X.Y.Z`) does the same with `digitalsamba376/sinch-ds:X.Y.Z` as `sinch-ds-prod`.
 
-1.  **Checkout:** Checks out the code.
-2.  **Set up Node.js:** Installs the specified Node.js version.
-3.  **Install Dependencies:** Runs `npm install` in the `sinch-ds` directory.
-4.  **Lint Check:** Runs ESLint (if configured).
-5.  **Run Tests:** Executes tests (currently a placeholder `npm test`).
-6.  **Login to GitHub Container Registry:** Logs into `ghcr.io`.
-7.  **Create .env file:** Creates a temporary `.env` file using secrets for the Docker build.
-8.  **Build and Push Docker Image:** Builds the Docker image (using the created `.env` file) and pushes it to `ghcr.io/<your-github-username>/sinch-conference-middleware`.
+Deployments run the container with `--restart unless-stopped` behind an nginx-proxy (`VIRTUAL_HOST`/`LETSENCRYPT_HOST`) on the `deployment_proxy` network. Secrets are written to a `0600` env file on the host rather than passed on the command line. Dependabot (`.github/dependabot.yml`) proposes npm, Docker base image and Actions updates.
 
-**Note:** You need to configure the following secrets in your GitHub repository settings (`Settings > Secrets and variables > Actions`) for the Docker build and push to work:
-*   `SINCH_APPLICATION_KEY`
-*   `SINCH_APPLICATION_SECRET`
-*   `PORT` (optional, defaults to 3030 in the action)
-*   `DATABASE_PATH` (optional, defaults to `./conference_data.db` in the action)
-*   `DIGITAL_SAMBA_DEVELOPER_KEY`
-*   `DIGITAL_SAMBA_TEAM_ID`
-*   `DIGITAL_SAMBA_API_URL` (optional, defaults to https://api.digitalsamba.com)
-*   `DEPLOYMENT_PATH` (optional, defaults to `/opt/deployment/sinch-ds-dev` in the action)
-*   `SERVER_HOST`
-*   `SERVER_USER`
-*   `SERVER_SSH_KEY`
-*   `DEV_HOST`
-*   `DOCKER_HUB_USERNAME`
-*   `DOCKER_HUB_TOKEN`
+Configure these secrets per GitHub environment (`development`, `production`):
+*   `SINCH_APPLICATION_KEY`, `SINCH_APPLICATION_SECRET`, `SINCH_REGION` (optional)
+*   `DIGITAL_SAMBA_DEVELOPER_KEY`, `DIGITAL_SAMBA_API_URL`, `DIGITAL_SAMBA_WEBHOOK_SECRET`, `SEND_CALLER_NUMBER` (optional)
+*   `ADMIN_USERNAME`, `ADMIN_PASSWORD`
+*   `PORT` (optional host port; defaults to 3030 for dev and 4030 for production), `DEPLOYMENT_PATH` (optional)
+*   `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`, `DEV_HOST` / `PRODUCTION_HOST`
+*   `DOCKER_HUB_USERNAME`, `DOCKER_HUB_TOKEN`
 
 ## Contributing
 
@@ -165,4 +176,3 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 ## License
 
 [MIT](LICENSE)
-# Triggering Development Deployment
