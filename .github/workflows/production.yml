@@ -3,63 +3,99 @@ on:
   push:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build-and-deploy:
+    needs: ci
     runs-on: ubuntu-latest
-    environment: production  # Specify the development environment to use its secrets
+    environment: production
     steps:
-      # Check out the repository code    
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      # Log in to Docker Hub
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}  
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Build and Push Docker Image
+      - name: Build and push image
         run: |
           docker build -t digitalsamba376/sinch-ds:${{ github.ref_name }} ./sinch-ds
           docker push digitalsamba376/sinch-ds:${{ github.ref_name }}
-      
-      - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@v1.0.3
+
+      # Secrets travel as environment variables (envs:) and are written to a 0600
+      # env file on the host, so they never appear in a `sudo docker run` command
+      # line (sudo session logs, ps, shell history).
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          IMAGE: digitalsamba376/sinch-ds:${{ github.ref_name }}
+          CONTAINER: sinch-ds-prod
+          DEPLOY_PATH: ${{ secrets.DEPLOYMENT_PATH }}
+          HOST_PORT: ${{ secrets.PORT || '4030' }}
+          VHOST: ${{ secrets.PRODUCTION_HOST }}
+          SINCH_APPLICATION_KEY: ${{ secrets.SINCH_APPLICATION_KEY }}
+          SINCH_APPLICATION_SECRET: ${{ secrets.SINCH_APPLICATION_SECRET }}
+          SINCH_REGION: ${{ secrets.SINCH_REGION }}
+          DIGITAL_SAMBA_DEVELOPER_KEY: ${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }}
+          DIGITAL_SAMBA_API_URL: ${{ secrets.DIGITAL_SAMBA_API_URL }}
+          DIGITAL_SAMBA_WEBHOOK_SECRET: ${{ secrets.DIGITAL_SAMBA_WEBHOOK_SECRET }}
+          SEND_CALLER_NUMBER: ${{ secrets.SEND_CALLER_NUMBER }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: IMAGE,CONTAINER,DEPLOY_PATH,HOST_PORT,VHOST,SINCH_APPLICATION_KEY,SINCH_APPLICATION_SECRET,SINCH_REGION,DIGITAL_SAMBA_DEVELOPER_KEY,DIGITAL_SAMBA_API_URL,DIGITAL_SAMBA_WEBHOOK_SECRET,SEND_CALLER_NUMBER,ADMIN_USERNAME,ADMIN_PASSWORD
           script: |
-            # Define deployment path using secret
-            DEPLOY_PATH="${{ secrets.DEPLOYMENT_PATH }}"
-            # Set default value if secret is empty
-            DEPLOY_PATH=${DEPLOY_PATH:-/opt/deployment/sinch-ds-prod}                     
-            echo "Pulling production Docker image..."
-            sudo docker pull digitalsamba376/sinch-ds:${{ github.ref_name }}      
-            echo "Stopping and removing existing container (if any)..."
-            sudo docker stop sinch-ds-prod || true
-            sudo docker rm sinch-ds-prod || true            
-            echo "Starting new container..."
-            sudo docker run -d --rm \
-                            --name sinch-ds-prod \
-                            --network deployment_proxy \
-                            -p ${{ secrets.PORT || 4030 }}:${{ secrets.PORT || 3030 }} \
-                            -p ${{ secrets.WS_PORT || 4031 }}:${{ secrets.WS_PORT || 3031 }} \
-                            -e VIRTUAL_HOST=${{ secrets.PRODUCTION_HOST  }} \
-                            -e LETSENCRYPT_HOST=${{ secrets.PRODUCTION_HOST  }} \
-                            -e VIRTUAL_PORT=${{ secrets.PORT || 3030 }} \
-                            -e PORT=${{ secrets.PORT || 3030 }} \
-                            -e WS_PORT=${{ secrets.WS_PORT || 3031 }} \
-                            -e SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }} \
-                            -e SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }} \
-                            -e DIGITAL_SAMBA_TEAM_ID=${{ secrets.DIGITAL_SAMBA_TEAM_ID }} \
-                            -e DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }} \
-                            -e DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }} \
-                            -e DATABASE_PATH=/app/conference_data.db \
-                            -v $DEPLOY_PATH/conference_data.db:/app/conference_data.db \
-                            digitalsamba376/sinch-ds:${{ github.ref_name }}
+            set -eu
+            DEPLOY_PATH="${DEPLOY_PATH:-/opt/deployment/sinch-ds-prod}"
+            ENV_FILE="$DEPLOY_PATH/sinch-ds.env"
+            DB_FILE="$DEPLOY_PATH/conference_data.db"
+
+            mkdir -p "$DEPLOY_PATH"
+            touch "$DB_FILE"
+            # The image runs as uid 1000 (node), so it must own the DB file.
+            sudo chown 1000:1000 "$DB_FILE"
+
+            umask 077
+            {
+              printf 'PORT=3030\n'
+              printf 'DATABASE_PATH=/app/conference_data.db\n'
+              printf 'VIRTUAL_HOST=%s\nLETSENCRYPT_HOST=%s\nVIRTUAL_PORT=3030\n' "$VHOST" "$VHOST"
+              for v in SINCH_APPLICATION_KEY SINCH_APPLICATION_SECRET SINCH_REGION \
+                       DIGITAL_SAMBA_DEVELOPER_KEY DIGITAL_SAMBA_API_URL DIGITAL_SAMBA_WEBHOOK_SECRET \
+                       SEND_CALLER_NUMBER ADMIN_USERNAME ADMIN_PASSWORD; do
+                eval "val=\${$v:-}"
+                if [ -n "$val" ]; then printf '%s=%s\n' "$v" "$val"; fi
+              done
+            } > "$ENV_FILE"
+
+            echo "Pulling $IMAGE..."
+            sudo docker pull "$IMAGE"
+            echo "Replacing $CONTAINER..."
+            sudo docker stop "$CONTAINER" || true
+            sudo docker rm "$CONTAINER" || true
+            # --restart unless-stopped and no --rm: the container must survive a host
+            # reboot (the old --rm/restart=no recipe deleted it on stop).
+            sudo docker run -d \
+              --name "$CONTAINER" \
+              --restart unless-stopped \
+              --network deployment_proxy \
+              -p "$HOST_PORT:3030" \
+              --env-file "$ENV_FILE" \
+              -v "$DB_FILE:/app/conference_data.db" \
+              "$IMAGE"
             echo "Deployment script finished."
