@@ -10,6 +10,41 @@ import {
 } from '../database.js';
 import digitalSambaService from '../services/digitalSambaService.js';
 
+// Caller info captured at ICE time, keyed by Sinch call ID, consumed at PIE time and
+// dropped at DICE time. Entries whose DICE never arrives are pruned after CALL_INFO_TTL_MS
+// so the map cannot grow without bound.
+const CALL_INFO_TTL_MS = 6 * 60 * 60 * 1000;
+const callInfo = new Map();
+
+const rememberCallInfo = (callId, info) => {
+  const now = Date.now();
+  for (const [id, entry] of callInfo) {
+    if (now - entry.storedAt > CALL_INFO_TTL_MS) callInfo.delete(id);
+  }
+  callInfo.set(callId, { ...info, storedAt: now });
+};
+
+/** Test helper: number of calls whose ICE info is currently held. */
+export const pendingCallInfoCount = () => callInfo.size;
+
+const pinMenu = (prompt) => ({
+  barge: true,
+  menus: [
+    {
+      id: 'main',
+      mainPrompt: `#tts[${prompt}]`,
+      maxDigits: 6,
+      timeoutMills: 30000,
+      options: [
+        {
+          dtmf: '#',
+          action: 'return'
+        }
+      ]
+    }
+  ]
+});
+
 /**
  * Handles an Incoming Call Event (ICE).
  * @param {Voice.IceRequest} iceRequest - The incoming ICE request object.
@@ -18,37 +53,16 @@ import digitalSambaService from '../services/digitalSambaService.js';
 export const handleIncomingCallEvent = (iceRequest) => {
   console.log(`Handling 'ICE' event:\n${JSON.stringify(iceRequest, null, 2)}`);
 
-  // Store the call information in application state for use in PIN input
-  // We'll store both the callId and cli (caller number) to associate with the call later
+  // Remember the caller number (CLI) so it can be attached to the call once the PIN is entered.
   if (iceRequest && iceRequest.cli) {
-    // Store in global context to access later
-    if (!global.callInfo) {
-      global.callInfo = {};
-    }
-    global.callInfo[iceRequest.callid] = {
-      cli: iceRequest.cli
-    };
+    rememberCallInfo(iceRequest.callid, { cli: iceRequest.cli });
     console.log(`Stored CLI ${iceRequest.cli} for call ID ${iceRequest.callid}`);
   }
 
   const response = new Voice.IceSvamletBuilder()
-    .setAction(Voice.iceActionHelper.runMenu({
-      barge: true,
-      menus: [
-        {
-          id: 'main',
-          mainPrompt: '#tts[Welcome to the conference. Please enter your PIN followed by hash sign.]',
-          maxDigits: 6,
-          timeoutMills: 30000,
-          options: [
-            {
-              dtmf: '#',
-              action: 'return'
-            }
-          ]
-        }
-      ]
-    }))
+    .setAction(Voice.iceActionHelper.runMenu(
+      pinMenu('Welcome to the conference. Please enter your PIN followed by hash sign.')
+    ))
     .build();
   
   console.log(`ICE Response:\n${JSON.stringify(response, null, 2)}`);
@@ -63,18 +77,18 @@ export const handleIncomingCallEvent = (iceRequest) => {
  */
 export const handlePinInput = async (pieRequest) => {
   console.log(`Handling 'PIE' event:\n${JSON.stringify(pieRequest, null, 2)}`);
-  let pin = pieRequest.menuResult.value;
-  pin = pin.replace(/#$/, '');
-  console.log(`Processed PIN: ${pin}`);
-
   try {
-    const user = await getUserByPin(parseInt(pin, 10));
+    const pin = String(pieRequest?.menuResult?.value ?? '').replace(/#$/, '');
+    console.log(`Processed PIN: ${pin}`);
+
+    // Only all-digit input can match a PIN; anything else (timeout, empty, '*') is a miss.
+    const user = /^\d+$/.test(pin) ? await getUserByPin(parseInt(pin, 10)) : undefined;
     let response;
 
     if (user) {
       const conferenceId = user.conference_id;
       const callId = pieRequest.callid;
-      let cli = global.callInfo && global.callInfo[callId] ? global.callInfo[callId].cli : null;
+      const cli = callInfo.get(callId)?.cli ?? null;
       const isSipUser = user.display_name?.startsWith('SIP');
 
       console.log(`PIN valid for user: ${user.display_name}, is_sip: ${isSipUser}. Connecting to conference: ${conferenceId}`);
@@ -84,7 +98,7 @@ export const handlePinInput = async (pieRequest) => {
         await addLiveCall({
           conference_id: conferenceId,
           call_id: callId,
-          pin: parseInt(pin, 10),
+          pin: user.pin,
           is_sip: isSipUser,
           cli: cli
         });
@@ -169,14 +183,25 @@ export const handlePinInput = async (pieRequest) => {
         .build();
 
     } else {
-       // ... (handle invalid PIN - unchanged) ...
+      // Unknown PIN: re-prompt. (This branch had been replaced by a placeholder comment in
+      // b60c797, so an invalid PIN produced an empty 200 response and Sinch dropped the call.)
+      console.log('PIN not recognised; re-prompting caller.');
+      response = new Voice.PieSvamletBuilder()
+        .setAction(Voice.pieActionHelper.runMenu(
+          pinMenu('Unrecognised PIN. Please enter your PIN followed by hash sign.')
+        ))
+        .build();
     }
 
     console.log(`PIE Response:\n${JSON.stringify(response, null, 2)}`);
     return response;
 
   } catch (error) {
-     // ... (handle general error - unchanged) ...
+    console.error('Error handling PIN input:', error);
+    return new Voice.PieSvamletBuilder()
+      .addInstruction(Voice.pieInstructionHelper.say('Sorry, we encountered a system error. Please try again later.'))
+      .setAction(Voice.pieActionHelper.hangup())
+      .build();
   }
 };
 
@@ -251,9 +276,7 @@ export const handleDisconnectedCallEvent = async (diceRequest) => {
       console.log(`Call ${callId} not found in live_calls table during DICE handling.`);
     }
 
-    // Clean up global call info store (unchanged)
-    if (global.callInfo && global.callInfo[callId]) {
-      delete global.callInfo[callId];
+    if (callInfo.delete(callId)) {
       console.log(`Removed call info for call ID ${callId}`);
     }
   } catch (error) {

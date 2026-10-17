@@ -22,7 +22,15 @@ export const voiceController = (app, sinchClientParameters) => {
     // Use the parsed body or the existing req.body (if any)
     const requestBody = parsedBody || req.body || {};
     
-    const event = voiceCallbackWebhooks.parseEvent(requestBody);
+    let event;
+    try {
+      event = voiceCallbackWebhooks.parseEvent(requestBody);
+    } catch (e) {
+      // parseEvent throws on a missing or unknown `event` field (e.g. ACE/notify).
+      console.warn('Unsupported Voice event:', e.message);
+      return res.status(400).json({ error: 'Unsupported event type' });
+    }
+
     let response;
     try {
       switch (event.event) {
@@ -30,10 +38,12 @@ export const voiceController = (app, sinchClientParameters) => {
           response = handleIncomingCallEvent(event);
           break;
         case 'pie':
-          response = await handlePinInput(event); // Added await here
+          response = await handlePinInput(event);
           break;
         case 'dice':
-          response = handleDisconnectedCallEvent(event);
+          // Await so DB cleanup and DS notifications finish before we acknowledge;
+          // previously the un-awaited promise was serialised as {}.
+          response = await handleDisconnectedCallEvent(event);
           break;
         default:
           return res.status(400).json({ error: 'Unsupported event type' });
