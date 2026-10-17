@@ -22,6 +22,8 @@ import { captureRawBody } from './middleware/rawbody.js';
 import { requireAdmin, resolveAdminAuth, safeEqual } from './middleware/auth.js';
 import sinchService from './services/sinchService.js';
 import { voiceController } from './voice/controller.js';
+import * as valid from './validation.js';
+import { sendClientError } from './validation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -109,7 +111,7 @@ export const createApp = ({
         console.info('Received Digital Samba event:', JSON.stringify(req.body, null, 2));
     
         try {
-            const event = req.body;
+            const event = req.body ?? {};
         
             // Handle events based on the actual Digital Samba event structure
             if (event && event.eventType && event.callId) {
@@ -177,15 +179,18 @@ export const createApp = ({
 
     // API routes for conferences
     app.post('/api/conference', async (req, res) => {
-        const { conference_id, digitalsamba_room_id } = req.body;
         try {
-            const result = await addConference({ conference_id, digitalsamba_room_id }); 
-            res.status(201).json({ 
-                id: result.id, // Assuming addConference returns the inserted ID
-                conference_id, 
-                digitalsamba_room_id 
+            const body = req.body ?? {};
+            const conference_id = valid.conferenceId(body.conference_id);
+            const digitalsamba_room_id = valid.roomId(body.digitalsamba_room_id);
+            const result = await addConference({ conference_id, digitalsamba_room_id });
+            res.status(201).json({
+                id: result.id,
+                conference_id,
+                digitalsamba_room_id
             });
         } catch (err) {
+            if (sendClientError(res, err, { conflict: 'Conference already exists' })) return;
             console.error('Error creating conference:', err);
             res.status(500).json({ error: 'Failed to create conference', message: err.message });
         }
@@ -217,8 +222,12 @@ export const createApp = ({
 
     // API routes for users
     app.post('/api/user', async (req, res) => {
-        const { conference_id, pin, display_name, external_id } = req.body;
         try {
+            const body = req.body ?? {};
+            const conference_id = valid.conferenceId(body.conference_id);
+            const pin = valid.pin(body.pin);
+            const display_name = valid.displayName(body.display_name);
+            const external_id = valid.externalId(body.external_id);
             const result = await addUser({ conference_id, pin, display_name, external_id });
             res.status(201).json({ 
                 id: result.id, 
@@ -228,6 +237,7 @@ export const createApp = ({
                 external_id
             });
         } catch (err) {
+            if (sendClientError(res, err, { conflict: 'PIN already in use', missing: 'Conference not found' })) return;
             console.error('Error creating user:', err);
             res.status(500).json({ error: 'Failed to create user', message: err.message });
         }
@@ -250,14 +260,15 @@ export const createApp = ({
     });
 
     app.delete('/api/user', async (req, res) => {
-        const { pin } = req.body;
         try {
+            const pin = valid.pin((req.body ?? {}).pin);
             const result = await deleteUserByPin(pin);
              if (result.changes === 0) {
                  return res.status(404).json({ message: 'User not found' });
             }
             res.json({ message: 'User deleted successfully' });
         } catch (err) {
+            if (sendClientError(res, err)) return;
             console.error('Error deleting user:', err);
             res.status(500).json({ error: 'Failed to delete user', message: err.message });
         }
@@ -265,9 +276,9 @@ export const createApp = ({
 
     // Update user external_id
     app.patch('/api/user/:pin/external-id', async (req, res) => {
-        const { pin } = req.params;
-        const { external_id } = req.body;
         try {
+            const pin = valid.pin(req.params.pin);
+            const external_id = valid.externalId((req.body ?? {}).external_id) ?? null;
             const result = await updateUserExternalId(pin, external_id);
             if (result.changes === 0) {
                 return res.status(404).json({ error: 'User not found' });
@@ -278,6 +289,7 @@ export const createApp = ({
                 external_id
             });
         } catch (err) {
+            if (sendClientError(res, err)) return;
             console.error('Error updating user external_id:', err);
             res.status(500).json({ error: 'Failed to update user external_id', message: err.message });
         }
