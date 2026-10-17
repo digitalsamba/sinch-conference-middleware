@@ -31,9 +31,10 @@ const run = (sql, values = []) => {
 export const initializeDatabase = async (filename = process.env.DATABASE_PATH || './conference_data.db') => {
     try {
         if (db) db.close();
-        // Matches the previous sqlite3 behaviour, where the PRAGMA was issued inside a
-        // transaction and therefore never took effect.
-        db = new DatabaseSync(filename, { enableForeignKeyConstraints: false });
+        // Foreign keys ON, so deleting a conference really cascades to its users and live
+        // calls. (The old sqlite3 code issued PRAGMA foreign_keys inside a transaction,
+        // where SQLite ignores it, so the ON DELETE CASCADE clauses never fired.)
+        db = new DatabaseSync(filename, { enableForeignKeyConstraints: true });
 
         console.log('Connected to the SQLite database.');
 
