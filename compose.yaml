@@ -1,29 +1,18 @@
+# Local run: cp sinch-ds/.env.sample sinch-ds/.env and sinch-ds/pins.example.json
+# sinch-ds/pins.json, fill both in, then `docker compose up -d --build` and point a
+# tunnel (ngrok, cloudflared) at http://127.0.0.1:3030.
 services:
   app:
     build:
-      # The application lives in ./sinch-ds (hyphen). This previously read
-      # ./sinch_ds (underscore), a directory that does not exist, so
-      # `docker compose build` failed before it started.
       context: ./sinch-ds
-      dockerfile: Dockerfile
     container_name: sinch-conference-middleware
-    # Without this the container does not come back after a host reboot or a
-    # docker daemon restart, and the service silently stays down.
     restart: unless-stopped
     env_file:
-      # Copy sinch-ds/.env.sample to sinch-ds/.env and fill it in first.
       - ./sinch-ds/.env
     environment:
-      # Keep the SQLite file on the named volume below. Without this it defaults
-      # to ./conference_data.db inside the image, i.e. it is lost on every
-      # recreate along with all conference and call state.
-      DATABASE_PATH: /data/conference_data.db
-    ports:
-      # The WebSocket server attaches to this same HTTP server (see
-      # src/server.js), so only one port is needed.
-      - "3030:3030"
+      PIN_MAP_FILE: /config/pins.json
     volumes:
-      - sinch-data:/data
-
-volumes:
-  sinch-data:
+      - ./sinch-ds/pins.json:/config/pins.json:ro
+    ports:
+      # Loopback only: the outside world reaches it through your tunnel / reverse proxy.
+      - "127.0.0.1:3030:3030"
