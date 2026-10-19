@@ -1,394 +1,70 @@
+// HTTP surface: exactly three routes. There is deliberately no admin API, UI or live log:
+// configuration is a file, and anything that could list PINs or calls is an attack surface.
+import crypto from 'node:crypto';
 import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import './env.js';
+import { createCallFlow } from './callFlow.js';
+import { createDsApi } from './digitalSamba.js';
+import { createSinchApi, verifySinchSignature } from './sinch.js';
 
-import {
-    addConference,
-    getAllConferences,
-    deleteConference,
-    addUser,
-    getAllUsers,
-    getUsersByConference,
-    deleteUserByPin,
-    updateUserExternalId,
-    getAllConferencesWithUsers,
-    getAllLiveCallsWithUserInfo,
-    getLiveCallsByConferenceWithUserInfo,
-    getLiveCall
-} from './database.js';
-import { captureRawBody } from './middleware/rawbody.js';
-import { requireAdmin, resolveAdminAuth, safeEqual } from './middleware/auth.js';
-import sinchService from './services/sinchService.js';
-import { voiceController } from './voice/controller.js';
-import * as valid from './validation.js';
-import { sendClientError } from './validation.js';
+// Constant-time compare; hashing first means the secret's length does not leak either.
+const safeEqual = (a, b) => crypto.timingSafeEqual(
+    crypto.createHash('sha256').update(String(a)).digest(),
+    crypto.createHash('sha256').update(String(b)).digest(),
+);
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Lookup tables as Maps, so an event named e.g. "constructor" cannot reach Object.prototype.
+const VOICE_EVENTS = ['ice', 'pie', 'dice'];
+const DS_COMMANDS = new Map([['phone_participant_muted', 'mute'], ['phone_participant_unmuted', 'unmute']]);
 
-export const DEFAULT_DS_WEBHOOK_SECRET = 'DigitalSambaListener';
-
-// Paths that authenticate themselves (Sinch signature / DS bearer secret) or must stay open.
-const PUBLIC_PATHS = new Set(['/VoiceEvent', '/DigitalSambaListener', '/healthz']);
-
-/**
- * Builds the Express application. The database must already be initialised.
- * Options default to the environment so production just calls createApp().
- */
-export const createApp = ({
-    sinchApplicationKey = process.env.SINCH_APPLICATION_KEY,
-    sinchApplicationSecret = process.env.SINCH_APPLICATION_SECRET,
-    digitalSambaWebhookSecret = process.env.DIGITAL_SAMBA_WEBHOOK_SECRET || DEFAULT_DS_WEBHOOK_SECRET,
-    adminAuth = resolveAdminAuth(),
-    corsOrigin = process.env.CORS_ORIGIN,
-} = {}) => {
-    if (digitalSambaWebhookSecret === DEFAULT_DS_WEBHOOK_SECRET) {
-        console.warn('DIGITAL_SAMBA_WEBHOOK_SECRET is unset or the published default; anyone can call /DigitalSambaListener. Set a random value.');
-    }
-    if (adminAuth.mode === 'locked') {
-        console.warn('ADMIN_USERNAME/ADMIN_PASSWORD not set: web UI, /api/* and the log stream are disabled.');
-    } else if (adminAuth.mode === 'open') {
-        console.warn('ADMIN_AUTH_DISABLED=true: web UI, /api/* and the log stream are open to anyone who can reach this port.');
-    }
-
-    // --- Middleware for Digital Samba Webhook Authentication ---
-    const verifyDigitalSambaAuth = (req, res, next) => {
-        const expectedAuthHeader = `Bearer ${digitalSambaWebhookSecret}`;
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader) {
-            console.warn('Digital Samba webhook received without Authorization header');
-            return res.status(401).json({ error: 'Authorization header is required' });
-        }
-
-        if (!safeEqual(authHeader, expectedAuthHeader)) {
-            console.warn('Digital Samba webhook received with invalid Authorization header');
-            return res.status(403).json({ error: 'Invalid Authorization header' });
-        }
-
-        console.info('Digital Samba webhook authenticated successfully');
-        next();
-    };
-
+export const createApp = (config, { ds = createDsApi(config.ds), sinch = createSinchApi(config.sinch) } = {}) => {
+    const flow = createCallFlow(config, ds);
     const app = express();
-
     app.disable('x-powered-by');
+    app.locals.flow = flow;
 
-    // Liveness probe for Docker/monitoring; touches nothing.
     app.get('/healthz', (req, res) => res.json({ status: 'ok' }));
 
-    // CORS is opt-in: the bundled UI is same-origin and needs none.
-    if (corsOrigin) {
-        app.use(cors({ origin: corsOrigin.split(',').map((o) => o.trim()) }));
-    }
+    // Sinch Voice callbacks. Configure https://<host>/VoiceEvent as the app's callback URL.
+    app.post('/VoiceEvent',
+        express.text({ type: () => true, limit: '64kb' }), // raw text: the signature covers the exact bytes
+        verifySinchSignature(config.sinch),
+        (req, res) => {
+            let event;
+            try { event = JSON.parse(req.body); } catch { return res.status(400).json({ error: 'Invalid JSON' }); }
+            if (!VOICE_EVENTS.includes(event?.event)) return res.status(400).json({ error: 'Unsupported event type' });
+            const handler = { ice: flow.onIce, pie: flow.onPie, dice: flow.onDice }[event.event];
+            res.json(handler(event));
+        });
 
-    // Everything except the self-authenticating webhooks is admin-only.
-    const adminGate = requireAdmin(adminAuth);
-    app.use((req, res, next) => (PUBLIC_PATHS.has(req.path) ? next() : adminGate(req, res, next)));
-
-    // /VoiceEvent needs the raw body for Sinch signature validation; everything else is JSON.
-    const jsonParser = express.json();
-    app.use((req, res, next) => {
-        if (req.path === '/VoiceEvent') {
-            captureRawBody(req, res, next);
-        } else {
-            jsonParser(req, res, next);
-        }
-    });
-
-    // Serve static files AFTER body parsing middleware
-    app.use(express.static(path.join(__dirname, '../public')));
-
-    // --- Sinch Voice callbacks (ICE/PIE/DICE) ---
-    voiceController(app, {
-        applicationKey: sinchApplicationKey,
-        applicationSecret: sinchApplicationSecret
-    });
-
-    // --- Digital Samba Webhook Listener ---
-    app.post('/DigitalSambaListener', verifyDigitalSambaAuth, async (req, res) => {
-        console.info('Received Digital Samba event:', JSON.stringify(req.body, null, 2));
-    
-        try {
-            const event = req.body ?? {};
-        
-            // Handle events based on the actual Digital Samba event structure
-            const commands = {
-                phone_participant_muted: { verb: 'mute', fn: sinchService.muteParticipant },
-                phone_participant_unmuted: { verb: 'unmute', fn: sinchService.unmuteParticipant },
-            };
-            if (event.eventType && event.callId) {
-                const command = commands[event.eventType];
-                if (command) {
-                    console.info(`Processing ${command.verb} request for call ID: ${event.callId}`);
-                    const livecall = await getLiveCall(String(event.callId));
-
-                    if (!livecall) {
-                        console.warn(`Call ID ${event.callId} not found in live calls`);
-                        return res.status(404).json({ error: 'Call not found' });
-                    }
-
-                    const result = await command.fn(livecall.conference_id, livecall.call_id);
-
-                    if (!result.success) {
-                        console.error(`Failed to ${command.verb} call ${event.callId}:`, result.error);
-                        return res.status(result.status || 500).json({
-                            error: `Failed to ${command.verb} participant`,
-                            details: result.error
-                        });
-                    }
-
-                    console.info(`Successfully ${command.verb}d call ${event.callId} in conference ${livecall.conference_id}`);
-                } else {
-                    console.info(`Received unhandled Digital Samba event type: ${event.eventType}`);
-                }
-            } else {
-                console.warn('Received malformed Digital Samba event:', event);
+    // Digital Samba webhooks: a moderator muted/unmuted a phone participant in the room.
+    // DS sends the shared secret as "Authorization: Bearer <secret>". Checked before parsing.
+    const dsAuthorized = (req) => (config.ds.webhookSecret
+        ? safeEqual(req.get('authorization') ?? '', `Bearer ${config.ds.webhookSecret}`)
+        : config.insecureDev);
+    app.post('/DigitalSambaListener',
+        (req, res, next) => (dsAuthorized(req) ? next() : res.status(401).json({ error: 'Unauthorized' })),
+        express.json({ limit: '64kb' }),
+        async (req, res) => {
+            const { eventType, callId } = req.body ?? {};
+            const command = DS_COMMANDS.get(eventType);
+            // Acknowledge events we do not act on, so DS does not retry them.
+            if (!command) return res.json({ ignored: true });
+            const call = flow.findCall(String(callId));
+            if (!call) return res.status(404).json({ error: 'Call not found' });
+            try {
+                await sinch[command](call.conferenceId, call.callId);
+            } catch (err) {
+                console.error(`${command} ${call.callId} failed: ${err.message}`);
+                return res.status(502).json({ error: `Could not ${command} participant` });
             }
+            console.log(`${command}d ${call.callId} in conference ${call.conferenceId}`);
+            res.json({ ok: true });
+        });
 
-            // Acknowledge receipt of the event
-            res.status(200).json({ message: 'Event received and processed' });
-        } catch (error) {
-            console.error('Error processing Digital Samba event:', error);
-            res.status(500).json({ error: 'Internal server error', message: error.message });
-        }
+    // Errors (e.g. oversized or malformed bodies): status only, never a stack trace or the body.
+    app.use((err, req, res, _next) => {
+        if (!err.expose) console.error(`${req.method} ${req.path}: ${err.message}`);
+        res.status(err.status || 500).json({ error: err.expose ? err.message : 'Internal error' });
     });
-
-    // --- API Routes ---
-
-    // API routes for conferences
-    app.post('/api/conference', async (req, res) => {
-        try {
-            const body = req.body ?? {};
-            const conference_id = valid.conferenceId(body.conference_id);
-            const digitalsamba_room_id = valid.roomId(body.digitalsamba_room_id);
-            const result = await addConference({ conference_id, digitalsamba_room_id });
-            res.status(201).json({
-                id: result.id,
-                conference_id,
-                digitalsamba_room_id
-            });
-        } catch (err) {
-            if (sendClientError(res, err, { conflict: 'Conference already exists' })) return;
-            console.error('Error creating conference:', err);
-            res.status(500).json({ error: 'Failed to create conference', message: err.message });
-        }
-    });
-
-    app.get('/api/conferences', async (req, res) => {
-        try {
-            const rows = await getAllConferences(); 
-            res.json(rows);
-        } catch (err) {
-            console.error('Error fetching conferences:', err);
-            res.status(500).json({ error: 'Failed to fetch conferences', message: err.message });
-        }
-    });
-
-    app.delete('/api/conference/:conference_id', async (req, res) => {
-        const conference_id = req.params.conference_id;
-        try {
-            const result = await deleteConference(conference_id); 
-            if (result.changes === 0) {
-                 return res.status(404).json({ message: 'Conference not found' });
-            }
-            res.json({ message: 'Conference and associated users deleted successfully' });
-        } catch (err) {
-            console.error('Error deleting conference:', err);
-            res.status(500).json({ error: 'Failed to delete conference', message: err.message });
-        }
-    });
-
-    // API routes for users
-    app.post('/api/user', async (req, res) => {
-        try {
-            const body = req.body ?? {};
-            const conference_id = valid.conferenceId(body.conference_id);
-            const pin = valid.pin(body.pin);
-            const display_name = valid.displayName(body.display_name);
-            const external_id = valid.externalId(body.external_id);
-            const result = await addUser({ conference_id, pin, display_name, external_id });
-            res.status(201).json({ 
-                id: result.id, 
-                conference_id, 
-                pin, 
-                display_name,
-                external_id
-            });
-        } catch (err) {
-            if (sendClientError(res, err, { conflict: 'PIN already in use', missing: 'Conference not found' })) return;
-            console.error('Error creating user:', err);
-            res.status(500).json({ error: 'Failed to create user', message: err.message });
-        }
-    });
-
-    app.get('/api/users', async (req, res) => {
-        const { conference_id } = req.query;
-        try {
-            let rows;
-            if (conference_id) {
-                rows = await getUsersByConference(conference_id);
-            } else {
-                rows = await getAllUsers();
-            }
-            res.json(rows);
-        } catch (err) {
-            console.error('Error fetching users:', err);
-            res.status(500).json({ error: 'Failed to fetch users', message: err.message });
-        }
-    });
-
-    app.delete('/api/user', async (req, res) => {
-        try {
-            const pin = valid.pin((req.body ?? {}).pin);
-            const result = await deleteUserByPin(pin);
-             if (result.changes === 0) {
-                 return res.status(404).json({ message: 'User not found' });
-            }
-            res.json({ message: 'User deleted successfully' });
-        } catch (err) {
-            if (sendClientError(res, err)) return;
-            console.error('Error deleting user:', err);
-            res.status(500).json({ error: 'Failed to delete user', message: err.message });
-        }
-    });
-
-    // Update user external_id
-    app.patch('/api/user/:pin/external-id', async (req, res) => {
-        try {
-            const pin = valid.pin(req.params.pin);
-            const external_id = valid.externalId((req.body ?? {}).external_id) ?? null;
-            const result = await updateUserExternalId(pin, external_id);
-            if (result.changes === 0) {
-                return res.status(404).json({ error: 'User not found' });
-            }
-            res.json({ 
-                message: 'User external_id updated successfully',
-                pin,
-                external_id
-            });
-        } catch (err) {
-            if (sendClientError(res, err)) return;
-            console.error('Error updating user external_id:', err);
-            res.status(500).json({ error: 'Failed to update user external_id', message: err.message });
-        }
-    });
-
-    // Get conferences with their associated users
-    app.get('/api/conferences-and-users', async (req, res) => {
-        try {
-            const results = await getAllConferencesWithUsers();
-            res.json(results);
-        } catch (error) {
-            console.error('Error fetching conferences and users:', error);
-            res.status(500).json({ error: 'Failed to fetch conferences and users', message: error.message });
-        }
-    });
-
-    // Get all live calls with user information
-    app.get('/api/live-calls', async (req, res) => {
-        try {
-            const rows = await getAllLiveCallsWithUserInfo();
-            res.json(rows);
-        } catch (err) {
-            console.error('Error fetching live calls:', err);
-            res.status(500).json({ error: 'Failed to fetch live calls', message: err.message });
-        }
-    });
-
-    // Get live calls for a specific conference
-    app.get('/api/live-calls/:conference_id', async (req, res) => {
-        const conference_id = req.params.conference_id;
-        try {
-            const rows = await getLiveCallsByConferenceWithUserInfo(conference_id);
-            res.json(rows);
-        } catch (err) {
-            console.error('Error fetching live calls for conference:', err);
-            res.status(500).json({ error: 'Failed to fetch live calls for conference', message: err.message });
-        }
-    });
-
-    // Mute a call
-    app.post('/api/call/:call_id/mute', async (req, res) => {
-        const call_id = req.params.call_id;
-        try {
-            const livecall = await getLiveCall(call_id);
-            if (!livecall) {
-                return res.status(404).json({ error: 'Call not found' });
-            }
-        
-            const result = await sinchService.muteParticipant(livecall.conference_id, call_id);
-        
-            if (!result.success) {
-                return res.status(result.status || 500).json({
-                    error: 'Failed to mute participant',
-                    sinchError: result.error,
-                    endpoint: result.endpoint
-                });
-            }
-        
-            console.log(`Successfully muted call: ${call_id} in conference ${livecall.conference_id}`);
-            res.json({ success: true, message: 'Call muted' });
-        } catch (error) {
-            console.error('Error muting call:', error);
-            res.status(500).json({ error: 'Failed to mute call', message: error.message });
-        }
-    });
-
-    // Unmute a call
-    app.post('/api/call/:call_id/unmute', async (req, res) => {
-        const call_id = req.params.call_id;
-        try {
-            const livecall = await getLiveCall(call_id);
-            if (!livecall) {
-                return res.status(404).json({ error: 'Call not found' });
-            }
-        
-            const result = await sinchService.unmuteParticipant(livecall.conference_id, call_id);
-        
-            if (!result.success) {
-                return res.status(result.status || 500).json({
-                    error: 'Failed to unmute participant',
-                    sinchError: result.error,
-                    endpoint: result.endpoint
-                });
-            }
-        
-            console.log(`Successfully unmuted call: ${call_id} in conference ${livecall.conference_id}`);
-            res.json({ success: true, message: 'Call unmuted' });
-        } catch (error) {
-            console.error('Error unmuting call:', error);
-            res.status(500).json({ error: 'Failed to unmute call', message: error.message });
-        }
-    });
-
-    // Kick a participant
-    app.post('/api/call/:call_id/kick', async (req, res) => {
-        const call_id = req.params.call_id;
-        try {
-            const livecall = await getLiveCall(call_id);
-            if (!livecall) {
-                return res.status(404).json({ error: 'Call not found' });
-            }
-        
-            const result = await sinchService.kickParticipant(livecall.conference_id, call_id);
-        
-            if (!result.success) {
-                return res.status(result.status || 500).json({
-                    error: 'Failed to kick participant',
-                    sinchError: result.error,
-                    endpoint: result.endpoint
-                });
-            }
-        
-            console.log(`Successfully kicked call: ${call_id} from conference ${livecall.conference_id}`);
-            res.json({ success: true, message: 'Participant kicked' });
-        } catch (error) {
-            console.error('Error kicking participant:', error);
-            res.status(500).json({ error: 'Failed to kick participant', message: error.message });
-        }
-    });
-
     return app;
 };

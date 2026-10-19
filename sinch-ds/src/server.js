@@ -1,45 +1,29 @@
-import http from 'http';
-import './env.js';
-
-import { initializeDatabase, closeDatabase } from './database.js';
+// Entry point: load and validate config, then serve. `npm start` loads ./.env if present.
+import { ConfigError, loadConfig } from './config.js';
 import { createApp } from './app.js';
-import { installLogBroadcast, attachLogWebSocket } from './logStream.js';
-import { resolveAdminAuth, checkAdminRequest } from './middleware/auth.js';
 
-const PORT = process.env.PORT || 3030;
-
-// Mirror console output to the UI's live log view (WebSocket on the same port).
-installLogBroadcast();
-
+let config;
 try {
-    await initializeDatabase();
-    console.log('Database initialized successfully.');
+    config = loadConfig();
 } catch (err) {
-    console.error('Failed to initialize database:', err);
+    if (!(err instanceof ConfigError)) throw err;
+    console.error(`Refusing to start, configuration problems:\n- ${err.message.split('\n').join('\n- ')}`);
     process.exit(1);
 }
+if (config.insecureDev && !config.ds.webhookSecret) {
+    console.warn('ALLOW_INSECURE_DEV=true and no DIGITAL_SAMBA_WEBHOOK_SECRET: anyone can call /DigitalSambaListener. Local use only.');
+}
 
-const adminAuth = resolveAdminAuth();
-const app = createApp({ adminAuth });
-const server = http.createServer(app);
-// The log stream carries caller numbers and call IDs: same credentials as the UI.
-const wss = attachLogWebSocket(server, {
-    verifyClient: ({ req }) => checkAdminRequest(adminAuth, req.headers.authorization) === 'ok',
+const app = createApp(config);
+const server = app.listen(config.port, () => {
+    console.log(`Listening on :${config.port} with ${config.pins.size} PIN(s), ${config.rooms.size} Digital Samba room(s)`);
 });
 
-server.listen(PORT, () => {
-    console.log(`HTTP Server listening on port ${PORT}`);
-});
-
-// Docker sends SIGTERM on stop; without a handler Node (as PID 1) ignores it and is
-// SIGKILLed 10 s later. Close cleanly so SQLite is not interrupted mid-write.
+// Docker stops with SIGTERM; Node as PID 1 would otherwise ignore it until SIGKILL.
 const shutdown = (signal) => {
-    console.log(`${signal} received, shutting down.`);
-    wss.clients.forEach((client) => client.terminate());
-    server.close(() => {
-        closeDatabase();
-        process.exit(0);
-    });
+    console.log(`${signal}: shutting down`);
+    server.close();
+    app.locals.flow.settled().then(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000).unref();
 };
 process.on('SIGTERM', () => shutdown('SIGTERM'));

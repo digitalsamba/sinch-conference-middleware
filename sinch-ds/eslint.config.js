@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-    { ignores: ['node_modules/', 'api-specs/'] },
+    { ignores: ['node_modules/'] },
     js.configs.recommended,
     {
         files: ['src/**/*.js', 'test/**/*.js', 'eslint.config.js'],
@@ -14,9 +14,5 @@ export default [
         rules: {
             'no-unused-vars': ['error', { argsIgnorePattern: '^_|^(req|res|next)$', caughtErrors: 'none' }],
         },
-    },
-    {
-        files: ['public/**/*.js'],
-        languageOptions: { globals: { ...globals.browser } },
     },
 ];

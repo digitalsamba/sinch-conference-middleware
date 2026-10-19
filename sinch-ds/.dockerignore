@@ -1,11 +1,9 @@
 node_modules
-conference_data.db*
-*.db
 .env
 .env.*
-!.env.sample
+# PIN maps are mounted at run time, never baked into the image.
+pins*.json
 test/
-api-specs/
 eslint.config.js
 Dockerfile
 .dockerignore
