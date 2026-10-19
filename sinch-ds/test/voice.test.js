@@ -72,6 +72,16 @@ test('phone caller joining while the SIP leg is present is announced', async () 
     assert.deepEqual(joined.map((c) => c.body), [[{ call_id: 'phone-2', name: 'Bob', caller_number: '+4930999999' }]]);
 });
 
+test('caller numbers are not sent to DS unless SEND_CALLER_NUMBER=true', async () => {
+    await ctx.close();
+    ctx = await startApp({ SEND_CALLER_NUMBER: undefined });
+    await send(pie('sip-1', '4321#'));
+    await send(ice('phone-2', '4930999999'));
+    await send(pie('phone-2', '5678#'));
+    const joined = await dsCalls('joined');
+    assert.deepEqual(joined.map((c) => c.body), [[{ call_id: 'phone-2', name: 'Bob' }]]);
+});
+
 test('DICE: phone caller leaving is reported; SIP leg leaving reports all phone callers left', async () => {
     await send(pie('sip-1', '4321#'));
     await send(pie('phone-1', '1234#'));

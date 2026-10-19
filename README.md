@@ -116,7 +116,7 @@ Copy [`sinch-ds/.env.sample`](sinch-ds/.env.sample) to `sinch-ds/.env`. The serv
 | `DIGITAL_SAMBA_DEVELOPER_KEY` | if any PIN has a `dsRoomId` | | Bearer token for the DS REST API |
 | `DIGITAL_SAMBA_API_URL` | no | `https://api.digitalsamba.com` | DS API base URL |
 | `DIGITAL_SAMBA_WEBHOOK_SECRET` | yes | | Shared secret DS sends as `Authorization: Bearer <secret>`. Generate with `openssl rand -hex 32` |
-| `SEND_CALLER_NUMBER` | no | `true` | `false` stops callers' numbers being sent to DS |
+| `SEND_CALLER_NUMBER` | no | `false` | `true` sends callers' phone numbers to DS (shown in the room). Off by default: they are personal data |
 | `PIN_MAP_FILE` | no | `pins.json` (Docker: `/config/pins.json`) | Path to the PIN map |
 | `PORT` | no | `3030` | HTTP port |
 | `ALLOW_INSECURE_DEV` | no | | `true` lets the service start without `DIGITAL_SAMBA_WEBHOOK_SECRET`, leaving `/DigitalSambaListener` open. Local experiments only |

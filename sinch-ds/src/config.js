@@ -98,7 +98,7 @@ export const loadConfig = (env = process.env) => {
             apiUrl: (env.DIGITAL_SAMBA_API_URL || 'https://api.digitalsamba.com').replace(/\/+$/, ''),
             developerKey: env.DIGITAL_SAMBA_DEVELOPER_KEY,
             webhookSecret,
-            sendCallerNumber: env.SEND_CALLER_NUMBER !== 'false',
+            sendCallerNumber: env.SEND_CALLER_NUMBER === 'true', // opt-in: callers' numbers are personal data
         },
     };
     if (problems.length) throw new ConfigError(problems.join('\n'));

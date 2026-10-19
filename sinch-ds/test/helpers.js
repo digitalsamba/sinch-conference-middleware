@@ -48,6 +48,7 @@ export const testEnv = (overrides = {}) => ({
     DIGITAL_SAMBA_API_URL: 'https://ds.example.test',
     DIGITAL_SAMBA_WEBHOOK_SECRET: DS_SECRET,
     PIN_MAP_FILE: writePinFile(PINS),
+    SEND_CALLER_NUMBER: 'true',
     ...overrides,
 });
 
