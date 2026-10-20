@@ -51,6 +51,15 @@ test('PIE with an invalid PIN, or no input, re-prompts', async () => {
     assert.equal(ctx.flow.findCall('c1'), undefined);
 });
 
+test('an unrecognised PIN logs why (menu result type, input method, digit count), not the digits', async () => {
+    await send({ event: 'pie', callid: 't1', menuResult: { type: 'timeout', value: '', inputMethod: 'dtmf', menuId: 'main' } });
+    await send({ event: 'pie', callid: 't2', menuResult: { type: 'sequence', value: '9876#', inputMethod: 'dtmf', menuId: 'main' } });
+    const all = logs.join('\n');
+    assert.match(all, /PIE t1: PIN not recognised \(timeout, dtmf, 0 digit\(s\)\)/);
+    assert.match(all, /PIE t2: PIN not recognised \(sequence, dtmf, 4 digit\(s\)\)/);
+    assert.doesNotMatch(all, /9876/);
+});
+
 test('SIP leg joining announces phone callers already in the conference', async () => {
     await send(ice('phone-1', '4930123456'));
     await send(pie('phone-1', '1234#'));

@@ -57,7 +57,10 @@ export const createCallFlow = ({ pins, rooms }, ds) => {
             const digits = String(event.menuResult?.value ?? '').replace(/#$/, '');
             const entry = /^\d+$/.test(digits) ? pins.get(digits.replace(/^0+(?=\d)/, '')) : undefined;
             if (!entry) {
-                console.log(`PIE ${event.callid}: PIN not recognised, asking again`);
+                // Say why without logging the digits: a timeout or 0 digits means the caller's
+                // keypresses never reached Sinch (phone/carrier DTMF), not a wrong PIN.
+                const { type = '?', inputMethod = '?' } = event.menuResult ?? {};
+                console.log(`PIE ${event.callid}: PIN not recognised (${type}, ${inputMethod}, ${digits.length} digit(s)), asking again`);
                 return svaml.askAgain();
             }
             const call = {
