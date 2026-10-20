@@ -38,7 +38,7 @@ jobs:
       # env file on the host, so they never appear in a `sudo docker run` command
       # line (sudo session logs, ps, shell history).
       - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1.2.2
+        uses: appleboy/ssh-action@v1.2.5
         env:
           IMAGE: digitalsamba376/sinch-ds:${{ github.ref_name }}
           CONTAINER: sinch-ds-prod
