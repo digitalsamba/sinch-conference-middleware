@@ -175,21 +175,18 @@ docker run -d --name sinch-ds --restart unless-stopped \
 
 Or `docker compose up -d --build` from the repository root (same thing, see [`compose.yaml`](compose.yaml)). The image runs as an unprivileged user (uid 1000), so on Linux `pins.json` must be readable by uid 1000. Publish the port on loopback only and put a tunnel or TLS reverse proxy in front.
 
-## Deployment (GitHub Actions)
+## Deployment
 
 - [`ci.yml`](.github/workflows/ci.yml), on every PR and push to `main`: `npm ci`, lint, tests, `npm audit --omit=dev --audit-level=high`. Then it builds the image, checks it refuses to start without the webhook secret, and checks it turns healthy with the example PIN map.
-- [`main.yml`](.github/workflows/main.yml), push to `main`: CI, push `digitalsamba376/sinch-ds:latest`, deploy `sinch-ds-dev` over SSH.
-- [`production.yml`](.github/workflows/production.yml), tag `X.Y.Z`: the same with `sinch-ds:X.Y.Z` as `sinch-ds-prod`.
+- [`main.yml`](.github/workflows/main.yml), push to `main`: CI, then push `digitalsamba376/sinch-ds:latest` and `:<short sha>`. It needs only `DOCKER_HUB_USERNAME` and `DOCKER_HUB_TOKEN`; it never touches a server and holds none of the app's secrets.
 
-The deploy joins the container to the `deployment_proxy` network behind nginx-proxy (`VIRTUAL_HOST` / `LETSENCRYPT_HOST`) and **publishes no host port**. Secrets go into a `0600` env file on the host, never onto a command line. The PIN map is written `0400` for uid 1000 and mounted read-only. The deploy fails, printing the container's last log lines, if the container does not turn healthy.
+Deploying is a step on the host, with [`deploy.sh`](deploy.sh):
 
-Secrets per GitHub environment (`development`, `production`):
+```sh
+sudo ./deploy.sh digitalsamba376/sinch-ds:latest sinch-ds /opt/deployment/sinch-ds
+```
 
-- `SINCH_APPLICATION_KEY`, `SINCH_APPLICATION_SECRET`, `SINCH_REGION` (optional)
-- `DIGITAL_SAMBA_DEVELOPER_KEY`, `DIGITAL_SAMBA_WEBHOOK_SECRET`, `DIGITAL_SAMBA_API_URL` (optional), `SEND_CALLER_NUMBER` (optional)
-- `PIN_MAP_JSON_B64`: `base64 < pins.json`. Optional if `<DEPLOYMENT_PATH>/pins.json` already exists on the host
-- `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`, `DEV_HOST` / `PRODUCTION_HOST`, `DEPLOYMENT_PATH` (optional)
-- `DOCKER_HUB_USERNAME`, `DOCKER_HUB_TOKEN`
+The deploy path holds `sinch-ds.env` (mode `0600`: the variables above plus `VIRTUAL_HOST`, `LETSENCRYPT_HOST` and `VIRTUAL_PORT=3030`) and `pins.json` (readable by uid 1000). The script joins the container to the `deployment_proxy` network behind nginx-proxy and **publishes no host port**; secrets stay in the env file, never on a command line; the PIN map is mounted read-only. If the new container does not turn healthy, it prints its last log lines and restores the previous one.
 
 ## Security notes
 
