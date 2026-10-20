@@ -206,7 +206,7 @@ Secrets per GitHub environment (`development`, `production`):
 | Service exits at startup with "Refusing to start" | Read the list it prints: a missing variable, a malformed `pins.json`, or `dsRoomId` without `DIGITAL_SAMBA_DEVELOPER_KEY` |
 | Caller hears nothing; logs show `Rejected /VoiceEvent` | Wrong key or secret, a server clock more than 15 minutes off, or a proxy that changes the path or body. The signature covers the path `/VoiceEvent` and the exact body bytes |
 | No `ICE` lines in the log at all | Callback URL not set on the Sinch app, the number not assigned to the app, or the tunnel/proxy not reaching port 3030 |
-| "Unrecognised PIN" for a PIN you configured | The PIN has a leading zero or more than 6 digits (refused at startup), or the caller did not finish with `#` before the 30-second timeout |
+| "Unrecognised PIN" for a PIN you configured | The PIN has a leading zero or more than 6 digits (refused at startup), or the caller did not finish with `#` before the 30-second timeout. The log line says which: `(timeout, dtmf, 0 digit(s))` means the keypresses never reached Sinch (phone or carrier DTMF), a digit count with `sequence`/`return` means a wrong PIN |
 | Phone callers in the conference but not in the DS room | The room's SIP leg is not in the conference (its `displayName` must start with `SIP`), there is no `dsRoomId` for that conference, or the DS call failed (look for `Digital Samba notification ... failed`) |
 | Muting in the DS room does nothing | DS webhook not configured or wrong secret (401), or the call is unknown to this instance (404, e.g. after a restart) |
 | Mute returns 502 | Sinch rejected the command: check `SINCH_REGION` matches where the conference lives |
