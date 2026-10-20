@@ -1,3 +1,6 @@
 .env
 sinch-ds/node_modules/
-sinch-ds/conference_data.db # Ignore SQLite database
+# Real PIN maps hold dial-in credentials; only pins.example.json is tracked.
+sinch-ds/pins.json
+sinch-ds/pins.*.json
+!sinch-ds/pins.example.json

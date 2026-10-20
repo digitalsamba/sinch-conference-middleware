@@ -1,0 +1,5 @@
+{
+  "1234": { "conferenceId": "demo-conference", "displayName": "Alice (phone)", "externalId": "crm-42" },
+  "5678": { "conferenceId": "demo-conference", "displayName": "Bob (phone)" },
+  "9999": { "conferenceId": "demo-conference", "displayName": "SIP Room Bridge", "dsRoomId": "00000000-0000-4000-8000-000000000000" }
+}

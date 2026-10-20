@@ -1,24 +1,29 @@
-# Set the base image with the specified Node.js version
-ARG NODE_VERSION=22.4.1
-FROM node:${NODE_VERSION}-bullseye-slim
+# syntax=docker/dockerfile:1
+# Node 24 LTS, pinned by digest (Dependabot's docker ecosystem bumps both lines).
 
-# Set the environment variable for Node.js to run in production mode
-ENV NODE_ENV=production
-
-# Create and set the working directory inside the container
+# --- deps: production node_modules only, resolved from the lockfile ---
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS deps
 WORKDIR /usr/src/app
-
-# Copy package.json and package-lock.json to the working directory
 COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-# Install dependencies
-RUN npm ci --omit=dev
+# --- runtime ---
+FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+ENV NODE_ENV=production \
+    PORT=3030 \
+    PIN_MAP_FILE=/config/pins.json
 
-# Copy all the application source files into the container
-COPY . .
+WORKDIR /usr/src/app
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+COPY package.json ./
+COPY src ./src
 
-# Expose port 3030 for the application
+# Run as the image's unprivileged `node` user (uid 1000). The app writes nothing to
+# disk: the PIN map is mounted read-only at /config/pins.json, call state is in memory.
+USER node
+
 EXPOSE 3030
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3030)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 
-# Define the command to run the application
 CMD ["node", "src/server.js"]

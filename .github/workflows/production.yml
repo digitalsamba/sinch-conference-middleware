@@ -3,63 +3,117 @@ on:
   push:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build-and-deploy:
+    needs: ci
     runs-on: ubuntu-latest
-    environment: production  # Specify the development environment to use its secrets
+    environment: production
     steps:
-      # Check out the repository code    
       - name: Checkout repository
         uses: actions/checkout@v4
-      
-      # Log in to Docker Hub
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}  
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Build and Push Docker Image
+      - name: Build and push image
         run: |
           docker build -t digitalsamba376/sinch-ds:${{ github.ref_name }} ./sinch-ds
           docker push digitalsamba376/sinch-ds:${{ github.ref_name }}
-      
-      - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@v1.0.3
+
+      # Secrets travel as environment variables (envs:) and are written to a 0600
+      # env file on the host, so they never appear in a `sudo docker run` command
+      # line (sudo session logs, ps, shell history).
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          IMAGE: digitalsamba376/sinch-ds:${{ github.ref_name }}
+          CONTAINER: sinch-ds-prod
+          DEPLOY_PATH: ${{ secrets.DEPLOYMENT_PATH }}
+          VHOST: ${{ secrets.PRODUCTION_HOST }}
+          SINCH_APPLICATION_KEY: ${{ secrets.SINCH_APPLICATION_KEY }}
+          SINCH_APPLICATION_SECRET: ${{ secrets.SINCH_APPLICATION_SECRET }}
+          SINCH_REGION: ${{ secrets.SINCH_REGION }}
+          DIGITAL_SAMBA_DEVELOPER_KEY: ${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }}
+          DIGITAL_SAMBA_API_URL: ${{ secrets.DIGITAL_SAMBA_API_URL }}
+          DIGITAL_SAMBA_WEBHOOK_SECRET: ${{ secrets.DIGITAL_SAMBA_WEBHOOK_SECRET }}
+          SEND_CALLER_NUMBER: ${{ secrets.SEND_CALLER_NUMBER }}
+          # Optional: base64 of the PIN map JSON. If unset, the pins.json already on the host is used.
+          PIN_MAP_JSON_B64: ${{ secrets.PIN_MAP_JSON_B64 }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: IMAGE,CONTAINER,DEPLOY_PATH,VHOST,SINCH_APPLICATION_KEY,SINCH_APPLICATION_SECRET,SINCH_REGION,DIGITAL_SAMBA_DEVELOPER_KEY,DIGITAL_SAMBA_API_URL,DIGITAL_SAMBA_WEBHOOK_SECRET,SEND_CALLER_NUMBER,PIN_MAP_JSON_B64
           script: |
-            # Define deployment path using secret
-            DEPLOY_PATH="${{ secrets.DEPLOYMENT_PATH }}"
-            # Set default value if secret is empty
-            DEPLOY_PATH=${DEPLOY_PATH:-/opt/deployment/sinch-ds-prod}                     
-            echo "Pulling production Docker image..."
-            sudo docker pull digitalsamba376/sinch-ds:${{ github.ref_name }}      
-            echo "Stopping and removing existing container (if any)..."
-            sudo docker stop sinch-ds-prod || true
-            sudo docker rm sinch-ds-prod || true            
-            echo "Starting new container..."
-            sudo docker run -d --rm \
-                            --name sinch-ds-prod \
-                            --network deployment_proxy \
-                            -p ${{ secrets.PORT || 4030 }}:${{ secrets.PORT || 3030 }} \
-                            -p ${{ secrets.WS_PORT || 4031 }}:${{ secrets.WS_PORT || 3031 }} \
-                            -e VIRTUAL_HOST=${{ secrets.PRODUCTION_HOST  }} \
-                            -e LETSENCRYPT_HOST=${{ secrets.PRODUCTION_HOST  }} \
-                            -e VIRTUAL_PORT=${{ secrets.PORT || 3030 }} \
-                            -e PORT=${{ secrets.PORT || 3030 }} \
-                            -e WS_PORT=${{ secrets.WS_PORT || 3031 }} \
-                            -e SINCH_APPLICATION_KEY=${{ secrets.SINCH_APPLICATION_KEY }} \
-                            -e SINCH_APPLICATION_SECRET=${{ secrets.SINCH_APPLICATION_SECRET }} \
-                            -e DIGITAL_SAMBA_TEAM_ID=${{ secrets.DIGITAL_SAMBA_TEAM_ID }} \
-                            -e DIGITAL_SAMBA_DEVELOPER_KEY=${{ secrets.DIGITAL_SAMBA_DEVELOPER_KEY }} \
-                            -e DIGITAL_SAMBA_API_URL=${{ secrets.DIGITAL_SAMBA_API_URL }} \
-                            -e DATABASE_PATH=/app/conference_data.db \
-                            -v $DEPLOY_PATH/conference_data.db:/app/conference_data.db \
-                            digitalsamba376/sinch-ds:${{ github.ref_name }}
-            echo "Deployment script finished."
+            set -eu
+            DEPLOY_PATH="${DEPLOY_PATH:-/opt/deployment/sinch-ds-prod}"
+            ENV_FILE="$DEPLOY_PATH/sinch-ds.env"
+            PIN_FILE="$DEPLOY_PATH/pins.json"
+
+            mkdir -p "$DEPLOY_PATH"
+            umask 077
+            {
+              printf 'PORT=3030\n'
+              printf 'VIRTUAL_HOST=%s\nLETSENCRYPT_HOST=%s\nVIRTUAL_PORT=3030\n' "$VHOST" "$VHOST"
+              for v in SINCH_APPLICATION_KEY SINCH_APPLICATION_SECRET SINCH_REGION \
+                       DIGITAL_SAMBA_DEVELOPER_KEY DIGITAL_SAMBA_API_URL DIGITAL_SAMBA_WEBHOOK_SECRET \
+                       SEND_CALLER_NUMBER; do
+                eval "val=\${$v:-}"
+                if [ -n "$val" ]; then printf '%s=%s\n' "$v" "$val"; fi
+              done
+            } > "$ENV_FILE"
+
+            # The PIN map holds dial-in credentials: 0400, readable only by the container's
+            # uid 1000 (node), mounted read-only.
+            if [ -n "${PIN_MAP_JSON_B64:-}" ]; then
+              printf '%s' "$PIN_MAP_JSON_B64" | base64 -d > "$PIN_FILE.new"
+              sudo chown 1000:1000 "$PIN_FILE.new"
+              sudo chmod 0400 "$PIN_FILE.new"
+              sudo mv "$PIN_FILE.new" "$PIN_FILE"
+            fi
+            if ! sudo test -s "$PIN_FILE"; then
+              echo "No PIN map: set the PIN_MAP_JSON_B64 secret or place $PIN_FILE on the host." >&2
+              exit 1
+            fi
+
+            echo "Pulling $IMAGE..."
+            sudo docker pull "$IMAGE"
+            echo "Replacing $CONTAINER..."
+            sudo docker stop "$CONTAINER" || true
+            sudo docker rm "$CONTAINER" || true
+            # No -p: the container is reachable only through the reverse proxy on the
+            # deployment_proxy network (VIRTUAL_HOST), never on a host port.
+            sudo docker run -d \
+              --name "$CONTAINER" \
+              --restart unless-stopped \
+              --network deployment_proxy \
+              --env-file "$ENV_FILE" \
+              -v "$PIN_FILE:/config/pins.json:ro" \
+              "$IMAGE"
+
+            # The app refuses to start on bad config; surface that here, not as a crash loop.
+            for i in $(seq 1 30); do
+              status=$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null || echo missing)
+              [ "$status" = healthy ] && break
+              sleep 2
+            done
+            if [ "$status" != healthy ]; then
+              sudo docker logs --tail 30 "$CONTAINER" >&2
+              echo "$CONTAINER is $status" >&2
+              exit 1
+            fi
+            echo "Deployment finished: $CONTAINER healthy."

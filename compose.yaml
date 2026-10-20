@@ -1,7 +1,18 @@
+# Local run: cp sinch-ds/.env.sample sinch-ds/.env and sinch-ds/pins.example.json
+# sinch-ds/pins.json, fill both in, then `docker compose up -d --build` and point a
+# tunnel (ngrok, cloudflared) at http://127.0.0.1:3030.
 services:
   app:
     build:
-      context: ./sinch_ds
-      dockerfile: Dockerfile
+      context: ./sinch-ds
+    container_name: sinch-conference-middleware
+    restart: unless-stopped
+    env_file:
+      - ./sinch-ds/.env
+    environment:
+      PIN_MAP_FILE: /config/pins.json
+    volumes:
+      - ./sinch-ds/pins.json:/config/pins.json:ro
     ports:
-      - 3030:3030
+      # Loopback only: the outside world reaches it through your tunnel / reverse proxy.
+      - "127.0.0.1:3030:3030"
