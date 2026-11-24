@@ -11,6 +11,10 @@ updates:
     directory: /sinch-ds
     schedule:
       interval: weekly
+    # Stay on the current Node LTS line; move majors by hand when the next LTS lands.
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /
     schedule:
